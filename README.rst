@@ -54,3 +54,27 @@ This becomes: ::
 The first line, again, is a representation of the key structure, this time with nesting. Notice that the value objects (the last three lines) also have the nesting structure, but *withouth* the keys that are represented in the key structure.
 
 Notice also that there are some non-primitive values in the data. This is fine, as long as the key structure is honored. Also, arrays are left as-is, since they are already compact.
+
+multiple record types
++++++++++++++++++++++
+
+When there is a need to represent multiple record types in the same file or stream, we must use the metadata section to define each type. The metadata section is just a json object, but with the outermost container consisting of parentheses, not curly braces. For the following example, we consider a stream with two record types:
+
+#. A transaction on an account, such as a purchase.
+#. A change of address on an account.
+
+Here is the initial json lines file: ::
+
+    {"account_number":111111111,"transaction_type":"sale","merchant_id":987654321,"amount":123.45}
+    {"account_number":111111111,"new_address":{"street":"123 main st.","city":"San Francisco","state":"CA","zip":"94103"}
+    {"account_number":222222222,"transaction_type":"sale","merchant_id":848757678,"amount":5974.29}
+    
+Here is the jsv file: ::
+
+    ("name":"transaction"){"account_number","transaction_type","merchant_id","amount"}
+    {111111111,"sale",987654321,123.45}
+    ("id":"A","name":"address change"){"account_number","new_address":{"street","city","state","zip"}}
+    A{111111111,{"123 main st.","San Francisco","CA","94103"}}
+    {222222222,"sale",848757678,5974.29}
+    
+Note that the ``id`` field in the metadata becomes the first character of any line of that record type. Without an ``id`` field specified, the *transaction* record type is the default.
