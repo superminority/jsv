@@ -77,4 +77,46 @@ Here is the jsv file: ::
     A{111111111,{"123 main st.","San Francisco","CA","94103"}}
     {222222222,"sale",848757678,5974.29}
     
-Note that the ``id`` field in the metadata becomes the first character of any line of that record type. Without an ``id`` field specified, the *transaction* record type is the default.
+Note that the ``id`` field in the metadata becomes the first character of any line of that record type. Without an ``id`` field specified, the *transaction* record type is the default. In addition, new record types can be defined at any time, provided they appear before any records of that type appear.
+
+definitions
+-----------
+
+Here are some terms specific to this project:
+
+keys object (k)
+  A data structure which contains only they keys for a json-like object, along with the nesting structure of the dictionaries of that object.
+
+values object (v)
+  A data structure which contains only the values for a json-like object, fully nested in both dictionaries and arrays.
+  
+json object (j)
+  An ordinary json object, or its equivalent representation in a given language.
+  
+In effect, we are converting dictionaries to lists in the values object, but we are careful to distinguish between a list that will be converted back to a dictionary. The same goes for the keys object, except that the primitives are all strings. Any library that implements the jsv format must therefore define list-like data structures to handle these cases.
+
+operations
+----------
+
+There are a number of operations on these objects, both unary and binary. We discuss them here.
+
+extract_keys (j -> k)
+  Creates a keys object from a json object?
+  
+compress (k, j -> v)
+  Creates a values object from a json object and a keys object?
+  
+decompress (k, v -> j)
+  Creates a json object from a values object and a keys object?
+  
+is_compressable (k, j -> bool)
+  Can a given json object be compressed using a given key structure?
+  
+is_decompressible (k, v -> bool)
+  Can a given values object be decompressed using a given key structure?
+  
+is_finer (k1, k2 -> bool)
+  Does k1 contain all the keys & nesting structure of k2? Another way to put this is that k2 should decompress every values object that k1 decompresses.
+
+is_courser (k1, k2 -> bool)
+  Just ``is_finer`` with the argument order reversed.
