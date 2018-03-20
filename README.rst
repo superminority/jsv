@@ -118,5 +118,5 @@ is_decompressible (k, v -> bool)
 is_finer (k1, k2 -> bool)
   Does k1 contain all the keys & nesting structure of k2? Another way to put this is that k2 should decompress every values object that k1 decompresses.
 
-is_courser (k1, k2 -> bool)
+is_coarser (k1, k2 -> bool)
   Just ``is_finer`` with the argument order reversed.
