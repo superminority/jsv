@@ -8,7 +8,7 @@ motivation
 
 JSON is an excellent universal represention for dictionaries, arrays and basic primitives. When representing records that are identical or nearly identical in schema, however, it is extremely verbose, as the same dictionary keys must be repeated for every record. The json lines format (which is just a sequence of json objects, each on a separate line of a file) therefore acheives great generality, but sacrifices compactness.
 
-Other formats, notably csv, are non-standardized, and can become leaky abstractions. In addition, they are usually confined to representing flat data, whereas json object are rich with nested arrays and objects.
+Other formats, notably csv, are non-standardized, and can become leaky abstractions. In addition, they are usually confined to representing flat data, whereas json objects are rich with nested arrays and dictionaries.
 
 This project replaces the json lines format with a rich, flexible, and compact representation of similar json objects. It aims to stay true to the simplicity and generality of json, and can represent any json object regardless of nesting. In addition, it provides for multiple record types in a single file or stream.
 
@@ -26,14 +26,12 @@ Let's start with the simplest example. Suppose we have a list of three json obje
     
 We transform this into: ::
 
-    (){"key_1","key_2","key_3"}
+    ("template":{"key_1","key_2","key_3"})
     {1,2,"three"}
     {"four",true,6}
     {7,"eight",null}
     
-The first line is simply a list of keys. We know it is a list of keys (rather than an array) it is surrounded by curly braces instead of brackets. Further, the parentheses at the beginning of the line indicate that it is not data, but metadata. This will be explained more fully as we go along.
-
-The next three lines are the values, but devoid of keys. This is where the jsv format gets its compactness, and the resemblence to both csv and json is clear. Nevertheless it is neither: all four lines are unparsable either as json or csv.
+The first line is simply a list of keys, embedded into a simple dictionary. We use parentheses instead of curly braces to distinguish it from a record. The next three lines are the values, but devoid of keys. This is where the jsv format gets its compactness, and the resemblence to both csv and json is clear. Nevertheless it is neither: all four lines are unparsable either as json or csv.
 
 nested objects
 ++++++++++++++
@@ -46,19 +44,17 @@ Let's consider some basic nested objects: ::
     
 This becomes: ::
 
-    (){"key_1":{"subkey_1","subkey"2},"key_2"}
+    ("template":{"key_1":{"subkey_1","subkey"2},"key_2"})
     {{1,2},["a","b","c"]}
     {{3,4},["d","e","f"]}
     {{5,{"subsubkey_1":"vvv"}},["g","h",["i","j","k"]]}
     
-The first line, again, is a representation of the key structure, this time with nesting. Notice that the value objects (the last three lines) also have the nesting structure, but *withouth* the keys that are represented in the key structure.
-
-Notice also that there are some non-primitive values in the data. This is fine, as long as the key structure is honored. Also, arrays are left as-is, since they are already compact.
+The template, again, is a representation of the key structure, this time with nesting. Notice that the value objects (the last three lines) also have the nesting structure, but *without* the keys that are represented in the template. Notice also that there are some non-primitive values in the data. This is fine, as long as the key structure is honored. Also, arrays are left as-is, since they are already compact.
 
 multiple record types
 +++++++++++++++++++++
 
-When there is a need to represent multiple record types in the same file or stream, we must use the metadata section to define each type. The metadata section is just a json object, but with the outermost container consisting of parentheses, not curly braces. For the following example, we consider a stream with two record types:
+When there is a need to represent multiple record types in the same file or stream, we must include more metadata in the object that defines the template. For the following example, we consider a stream with two record types:
 
 #. A transaction on an account, such as a purchase.
 #. A change of address on an account.
@@ -71,9 +67,9 @@ Here is the initial json lines file: ::
     
 Here is the jsv file: ::
 
-    ("name":"transaction"){"account_number","transaction_type","merchant_id","amount"}
+    ("name":"transaction","template":{"account_number","transaction_type","merchant_id","amount"})
     {111111111,"sale",987654321,123.45}
-    ("id":"A","name":"address change"){"account_number","new_address":{"street","city","state","zip"}}
+    ("id":"A","name":"address change","template":{"account_number","new_address":{"street","city","state","zip"}})
     A{111111111,{"123 main st.","San Francisco","CA","94103"}}
     {222222222,"sale",848757678,5974.29}
     
@@ -84,13 +80,13 @@ definitions
 
 Here are some terms specific to this project:
 
-keys object (k)
+template (t)
   A data structure which contains only they keys for a json-like object, along with the nesting structure of the dictionaries of that object.
 
-values object (v)
+record (r)
   A data structure which contains only the values for a json-like object, fully nested in both dictionaries and arrays.
   
-json object (j)
+object (o)
   An ordinary json object, or its equivalent representation in a given language.
   
 In effect, we are converting dictionaries to lists in the values object, but we are careful to distinguish between a list that will be converted back to a dictionary. The same goes for the keys object, except that the primitives are all strings. Any library that implements the jsv format must therefore define list-like data structures to handle these cases.
@@ -100,23 +96,23 @@ operations
 
 There are a number of operations on these objects, both unary and binary. We discuss them here.
 
-extract_keys (j -> k)
-  Creates a keys object from a json object?
+extract_template (o -> t)
+  Creates a template from a json object.
   
-compress (k, j -> v)
-  Creates a values object from a json object and a keys object?
+compress (t, o -> r)
+  Creates a record from a json object and a template.
   
-decompress (k, v -> j)
-  Creates a json object from a values object and a keys object?
+decompress (t, r -> o)
+  Creates a json object from a values object and a keys object.
   
-is_compressable (k, j -> bool)
+is_compressable (t, o -> bool)
   Can a given json object be compressed using a given key structure?
   
-is_decompressible (k, v -> bool)
+is_decompressible (t, r -> bool)
   Can a given values object be decompressed using a given key structure?
   
-is_finer (k1, k2 -> bool)
-  Does k1 contain all the keys & nesting structure of k2? Another way to put this is that k2 should decompress every values object that k1 decompresses.
+is_finer (t1, t2 -> bool)
+  Does t1 contain all the keys & nesting structure of t2? Another way to put this is that t2 should decompress every values object that t1 decompresses.
 
-is_coarser (k1, k2 -> bool)
+is_coarser (t1, t2 -> bool)
   Just ``is_finer`` with the argument order reversed.
