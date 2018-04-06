@@ -51,6 +51,20 @@ This becomes: ::
     
 The template, again, is a representation of the key structure, this time with nesting. Notice that the value objects (the last three lines) also have the nesting structure, but *without* the keys that are represented in the template. Notice also that there are some non-primitive values in the data. This is fine, as long as the key structure is honored. Also, arrays are left as-is, since they are already compact.
 
+nested arrays
++++++++++++++
+
+Here are some objects with nested arrays: ::
+
+    [{"arrival_time":"8:00","guests":[{"name":"Alice","age":37},{"name":"Bob","age":73}]},{"arrival_time":"8:30","guests":[{"name":"Cookie Monster","age":49}]}]
+
+Here is the jsv file: ::
+
+    ("template": [{"arrival_time","guests":[{"name","age"}])
+    [{"8:00",[{"Alice",37},{"Bob",73}]},{"8:30",[{"Cookie Monster",49}]}]
+
+Note in this case that the file is actually shorter than the original for only 1 record.
+
 multiple record types
 +++++++++++++++++++++
 
