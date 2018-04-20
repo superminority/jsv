@@ -77,6 +77,15 @@ class KeyList:
         self._index += 1
         return out
 
+    def expand(self, rd):
+        out = {}
+        for k, r in zip(self, rd):
+            if isinstance(k, str):
+                out[k] = r
+            else:
+                out[k[0]] = k[1].expand(r)
+        return out
+
 
 class ArrayDef:
     def __init__(self, obj):
@@ -84,6 +93,15 @@ class ArrayDef:
         if e:
             raise e
         self._def = obj
+
+    def expand(self, rl):
+        out = []
+        if self._def is None:
+            for r in rl:
+                out.append(r)
+        else:
+            for r in rl:
+                out.append(self._def.expand(r))
 
 
 def check_key_element_type(obj):
@@ -97,7 +115,7 @@ def check_key_element_type(obj):
 
 
 def check_arraydef_arg_type(obj):
-    if isinstance(obj, KeyList) or isinstance(obj, ArrayDef):
+    if obj is None or isinstance(obj, KeyList) or isinstance(obj, ArrayDef):
         return
 
-    return TypeError('ArrayDef argument must be of type `KeyList` or `ArrayDef`')
+    return TypeError('ArrayDef argument must be of type `KeyList`, `ArrayDef`, or None')
