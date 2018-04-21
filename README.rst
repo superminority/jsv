@@ -27,11 +27,21 @@ Let's start with the simplest example. Suppose we have a list of three json obje
 We transform this into: ::
 
     ("template":{"key_1","key_2","key_3"})
-    {1,2,"three"}
-    {"four",true,6}
-    {7,"eight",null}
+    {1,2,:"three"}
+    {:"four",true,6}
+    {7,:"eight",null}
     
 The first line is simply a list of keys, embedded into a simple dictionary. We use parentheses instead of curly braces to distinguish it from a record. The next three lines are the values, but devoid of keys. This is where the jsv format gets its compactness, and the resemblence to both csv and json is clear. Nevertheless it is neither: all four lines are unparsable either as json or csv.
+
+We also add a colon before string values to distinguish strings as *values* from strings as *keys*. This is important, because full json objects are always acceptable as values. For example, in the last record from the previous example, we need a way to distinguish
+
+    {7,:"eight",null} => {"key_1":7,"key_2":"eight","key_3":null}
+    
+from
+
+    {7,"eight":8,:"some other string",null} => {"key_1":7,"eight":8,"key_2":"eight","key_3":null}
+
+Both of these are valid records under the template in the previous example. In keeping with the simplicity-first approach of json parsing, we must know from the first character whether something is a key or a value. The colon allows this.
 
 nested objects
 ++++++++++++++
@@ -61,7 +71,7 @@ Here are some objects with nested arrays: ::
 Here is the jsv file: ::
 
     ("template": [{"arrival_time","guests":[{"name","age"}])
-    [{"8:00",[{"Alice",37},{"Bob",73}]},{"8:30",[{"Cookie Monster",49}]}]
+    [{:"8:00",[{:"Alice",37},{:"Bob",73}]},{:"8:30",[{:"Cookie Monster",49}]}]
 
 Note in this case that the file is actually shorter than the original for only 1 record.
 
@@ -82,10 +92,10 @@ Here is the initial json lines file: ::
 Here is the jsv file: ::
 
     ("name":"transaction","template":{"account_number","transaction_type","merchant_id","amount"})
-    {111111111,"sale",987654321,123.45}
+    {111111111,:"sale",987654321,123.45}
     ("id":"A","name":"address change","template":{"account_number","new_address":{"street","city","state","zip"}})
-    A{111111111,{"123 main st.","San Francisco","CA","94103"}}
-    {222222222,"sale",848757678,5974.29}
+    A{111111111,{:"123 main st.",:"San Francisco",:"CA",:"94103"}}
+    {222222222,:"sale",848757678,5974.29}
     
 Note that the ``id`` field in the metadata becomes the first character of any line of that record type. Without an ``id`` field specified, the *transaction* record type is the default. In addition, new record types can be defined at any time, provided they appear before any records of that type appear.
 
