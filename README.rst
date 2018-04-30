@@ -140,3 +140,16 @@ is_finer (t1, t2 -> bool)
 
 is_coarser (t1, t2 -> bool)
   Just ``is_finer`` with the argument order reversed.
+
+future features
+---------------
+
+boolean collapse
+++++++++++++++++
+
+store boolean values as ``t`` and ``f`` instead of ``true`` and ``false``. Also store null as ``n`` instead of ``null``.
+
+string enumerations
++++++++++++++++++++
+
+For a given [json path](http://goessner.net/articles/JsonPath/), support automatically replacing strings with placeholders.
