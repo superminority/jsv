@@ -33,11 +33,11 @@ We transform this into: ::
     
 The first line is simply a list of keys, embedded into a simple dictionary. We use parentheses instead of curly braces to distinguish it from a record. The next three lines are the values, but devoid of keys. This is where the jsv format gets its compactness, and the resemblence to both csv and json is clear. Nevertheless it is neither: all four lines are unparsable either as json or csv.
 
-We also add a colon before string values to distinguish strings as *values* from strings as *keys*. This is important, because full json objects are always acceptable as values. For example, in the last record from the previous example, we need a way to distinguish
+We also add a colon before string values to distinguish strings as *values* from strings as *keys*. This is important, because full json objects are always acceptable as values. For example, in the last record from the previous example, we need a way to distinguish ::
 
     {7,:"eight",null} => {"key_1":7,"key_2":"eight","key_3":null}
     
-from
+from ::
 
     {7,"eight":8,:"some other string",null} => {"key_1":7,"eight":8,"key_2":"eight","key_3":null}
 
@@ -152,4 +152,4 @@ store boolean values as ``t`` and ``f`` instead of ``true`` and ``false``. Also 
 string enumerations
 +++++++++++++++++++
 
-For a given [json path](http://goessner.net/articles/JsonPath/), support automatically replacing strings with placeholders.
+For a given `json path <http://goessner.net/articles/JsonPath/>`_, support automatically replacing strings with placeholders.
