@@ -90,6 +90,7 @@ __author__ = 'Bob Ippolito <bob@redivi.com>'
 
 from .decoder import JSONDecoder, JSONDecodeError
 from .encoder import JSONEncoder
+from .template import JSVObjectKeys, JSVArrayDef, JSVObjectValues, JSVArrayValues
 import codecs
 
 _default_encoder = JSONEncoder(
