@@ -1,4 +1,5 @@
-from .decoder import scanner, scanstring, JSONDecodeError, WHITESPACE, WHITESPACE_STR, _CONSTANTS
+from .decoder import scanstring, JSONDecodeError, WHITESPACE, WHITESPACE_STR, _CONSTANTS
+from .scanner import py_make_scanner as make_scanner
 
 class JSVObjectValues:
     def __init__(self, *args):
@@ -127,7 +128,7 @@ def check_arraydef_arg_type(obj):
 def JSVTemplateObject(s_and_end, strict, scan_once, object_hook, object_pairs_hook,
                       memo=None, _w=WHITESPACE.match, _ws=WHITESPACE_STR):
     s, end = s_and_end
-    keys = []
+    keys = JSVObjectKeys()
     # Backwards compatibility
     if memo is None:
         memo = {}
@@ -156,7 +157,6 @@ def JSVTemplateObject(s_and_end, strict, scan_once, object_hook, object_pairs_ho
         key, end = scanstring(s, end, strict)
         if key in keys:
             raise KeyError('Cannot have duplicate key in dictionary')
-        keys.append(key)
         try:
             nextchar = s[end]
             if nextchar in _ws:
@@ -167,15 +167,42 @@ def JSVTemplateObject(s_and_end, strict, scan_once, object_hook, object_pairs_ho
         end += 1
 
         if nextchar == '}':
+            keys.append(key)
             break
+        elif nextchar == ':':
+            try:
+                if s[end] in _ws:
+                    end += 1
+                    if s[end] in _ws:
+                        end = _w(s, end + 1).end()
+            except IndexError:
+                pass
+            try:
+                template, end = scan_once(s, end)
+            except StopIteration as err:
+                raise JSONDecodeError("Expecting template", s, err.value) from None
+            keys.append((key, template))
+            end += 1
+        elif nextchar == ',':
+            keys.append(key)
         elif nextchar != ',':
             raise JSONDecodeError("Expecting ',' delimiter", s, end - 1)
         end = _w(s, end).end()
-        nextchar = s[end:end + 1]
+        try:
+            nextchar = s[end:end + 1]
+        except IndexError:
+            nextchar = ''
         end += 1
         if nextchar != '"':
             raise JSONDecodeError(
                 "Expecting property name enclosed in double quotes", s, end - 1)
+    if object_pairs_hook is not None:
+        result = object_pairs_hook(keys)
+        return result, end
+    if object_hook is not None:
+        keys = object_hook(keys)
+    return keys, end
+
 
 class JSVArray:
     pass
@@ -249,7 +276,7 @@ class JSVDecoder(object):
         self.parse_array = JSVArray
         self.parse_string = scanstring
         self.memo = {}
-        self.scan_once = scanner.make_scanner(self)
+        self.scan_once = make_scanner(self)
 
     def decode(self, s, _w=WHITESPACE.match):
         """Return the Python representation of ``s`` (a ``str`` instance

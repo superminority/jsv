@@ -1,5 +1,5 @@
 import pytest
-from .template import JSVObjectValues, JSVArrayValues, JSVObjectKeys, JSVArrayDef
+from .template import JSVObjectValues, JSVArrayValues, JSVObjectKeys, JSVArrayDef, JSVDecoder
 
 
 def test_record_dict():
@@ -41,3 +41,10 @@ def test_array_expand():
 
     ad = JSVArrayDef(JSVObjectKeys(*input['keys']))
     assert ad.expand(input['values']) == expected
+
+
+def test_template_decode():
+    template_string = '{"key_1","key_2","key_3"}'
+    expected = JSVObjectKeys('key_1', 'key_2', 'key_3')
+    out = JSVDecoder().decode(template_string)
+    assert out == expected
