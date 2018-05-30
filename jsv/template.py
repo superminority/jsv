@@ -57,6 +57,11 @@ def check_value_type(val):
     return TypeError('RecordDict argument must be another RecordDict, a RecordList, or a json primitive type')
 
 
+class JSVJsonObject:
+    def expand(self, obj):
+        return obj
+
+
 class JSVObjectKeys:
     def __init__(self, *args):
         self._values = []
@@ -80,6 +85,9 @@ class JSVObjectKeys:
         self._index += 1
         return out
 
+    def __len__(self):
+        return len(self._values)
+
     def expand(self, rd):
         out = {}
         for k, r in zip(self, rd):
@@ -89,23 +97,73 @@ class JSVObjectKeys:
                 out[k[0]] = k[1].expand(r)
         return out
 
+    def __eq__(self, other):
+        if not isinstance(other, JSVObjectKeys):
+            print('wrong type')
+            return False
+
+        if len(self) != len(other):
+            print('wrong length')
+            return False
+
+        for key_self, key_other in zip(self, other):
+            if key_self != key_other:
+                print('key not the same')
+                return False
+
+        return True
+
 
 class JSVArrayDef:
-    def __init__(self, obj):
-        e = check_arraydef_arg_type(obj)
-        if e:
-            raise e
-        self._def = obj
+    def __init__(self, *args):
+        self._values = []
+        for obj in args:
+            e = check_arraydef_arg_type(obj)
+            if e:
+                raise e
+
+        for obj in args:
+            self._values.append(obj)
+
+        if len(args) == 0:
+            self._values = [JSVJsonObject()]
+
+    def __iter__(self):
+        self._index = 0
+        return self
+
+    def __next__(self):
+        if len(self._values) <= self._index:
+            raise StopIteration
+        out = self._values[self._index]
+        self._index += 1
+        return out
+
+    def __len__(self):
+        return len(self._values) + 1
 
     def expand(self, rl):
         out = []
-        if self._def is None:
-            for r in rl:
-                out.append(r)
-        else:
-            for r in rl:
-                out.append(self._def.expand(r))
+        i = 0
+        for rec in rl:
+            defn = self._values[i]
+            out.append(defn.expand(rec))
+            i = min(i+1, len(self._values) - 1)
+
         return out
+
+    def __eq__(self, other):
+        if not isinstance(other, JSVArrayDef):
+            return False
+
+        if len(self) != len(other):
+            return False
+
+        for arr_self, arr_other in zip(self, other):
+            if arr_self != arr_other:
+                return False
+
+        return True
 
 
 def check_key_element_type(obj):
@@ -166,10 +224,7 @@ def JSVTemplateObject(s_and_end, strict, scan_once, object_hook, object_pairs_ho
             nextchar = ''
         end += 1
 
-        if nextchar == '}':
-            keys.append(key)
-            break
-        elif nextchar == ':':
+        if nextchar == ':':
             try:
                 if s[end] in _ws:
                     end += 1
@@ -181,8 +236,19 @@ def JSVTemplateObject(s_and_end, strict, scan_once, object_hook, object_pairs_ho
                 template, end = scan_once(s, end)
             except StopIteration as err:
                 raise JSONDecodeError("Expecting template", s, err.value) from None
-            keys.append((key, template))
+            key = (key, template)
+            try:
+                nextchar = s[end]
+                if nextchar in _ws:
+                    end = _w(s, end + 1).end()
+                    nextchar = s[end]
+            except IndexError:
+                nextchar = ''
             end += 1
+
+        if nextchar == '}':
+            keys.append(key)
+            break
         elif nextchar == ',':
             keys.append(key)
         elif nextchar != ',':
@@ -204,8 +270,41 @@ def JSVTemplateObject(s_and_end, strict, scan_once, object_hook, object_pairs_ho
     return keys, end
 
 
-class JSVArray:
-    pass
+def JSVArray(s_and_end, scan_once, _w=WHITESPACE.match, _ws=WHITESPACE_STR):
+    s, end = s_and_end
+    values = []
+    nextchar = s[end:end + 1]
+    if nextchar in _ws:
+        end = _w(s, end + 1).end()
+        nextchar = s[end:end + 1]
+    # Look-ahead for trivial empty array
+    if nextchar == ']':
+        return JSVArrayDef(*values), end + 1
+    _append = values.append
+    while True:
+        try:
+            value, end = scan_once(s, end)
+        except StopIteration as err:
+            raise JSONDecodeError("Expecting value", s, err.value) from None
+        _append(value)
+        nextchar = s[end:end + 1]
+        if nextchar in _ws:
+            end = _w(s, end + 1).end()
+            nextchar = s[end:end + 1]
+        end += 1
+        if nextchar == ']':
+            break
+        elif nextchar != ',':
+            raise JSONDecodeError("Expecting ',' delimiter", s, end - 1)
+        try:
+            if s[end] in _ws:
+                end += 1
+                if s[end] in _ws:
+                    end = _w(s, end + 1).end()
+        except IndexError:
+            pass
+
+    return JSVArrayDef(*values), end
 
 
 class JSVDecoder(object):

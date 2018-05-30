@@ -43,8 +43,22 @@ def test_array_expand():
     assert ad.expand(input['values']) == expected
 
 
-def test_template_decode():
+def test_decode_simple_keys():
     template_string = '{"key_1","key_2","key_3"}'
     expected = JSVObjectKeys('key_1', 'key_2', 'key_3')
+    out = JSVDecoder().decode(template_string)
+    assert out == expected
+
+
+def test_decode_simple_array():
+    template_string = '[{"key_1","key_2"}]'
+    expected = JSVArrayDef(JSVObjectKeys('key_1', 'key_2'))
+    out = JSVDecoder().decode(template_string)
+    assert out == expected
+
+
+def test_decode_keys_with_array():
+    template_string = '{"key_1","key_2":[{"array_key_1","array_key_2"}]}'
+    expected = JSVObjectKeys("key_1", ("key_2", JSVArrayDef(JSVObjectKeys('array_key_1', 'array_key_2'))))
     out = JSVDecoder().decode(template_string)
     assert out == expected
