@@ -113,6 +113,26 @@ class JSVObjectKeys:
 
         return True
 
+    def __getitem__(self, key):
+        try:
+            out = self._values[key]
+        except IndexError:
+            raise IndexError('JSVObjectKeys index out of range') from None
+        except Exception:
+            raise
+
+        return out
+
+    def __str__(self):
+        strs = []
+        for k in self._values:
+            if isinstance(k, str):
+                strs.append('"{}"'.format(k))
+            else:
+                strs.append('"{0}":{1}'.format(k[0], str(k[1])))
+
+        return '{{{}}}'.format(','.join(strs))
+
 
 class JSVArrayDef:
     def __init__(self, *args):
@@ -164,6 +184,23 @@ class JSVArrayDef:
                 return False
 
         return True
+
+    def __getitem__(self, key):
+        try:
+            out = self._values[key]
+        except IndexError:
+            raise IndexError('JSVArrayDef index out of range') from None
+        except Exception:
+            raise
+
+        return out
+
+    def __str__(self):
+        strs = []
+        for k in self._values:
+            strs.append(str(k))
+
+        return '[{}]'.format(','.join(strs))
 
 
 def check_key_element_type(obj):

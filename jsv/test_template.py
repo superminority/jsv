@@ -62,3 +62,26 @@ def test_decode_keys_with_array():
     expected = JSVObjectKeys("key_1", ("key_2", JSVArrayDef(JSVObjectKeys('array_key_1', 'array_key_2'))))
     out = JSVDecoder().decode(template_string)
     assert out == expected
+
+def test_decode_values_with_array():
+    template_string = '{"key_1","key_2":[{"array_key_1","array_key_2"}]}'
+    template = JSVDecoder().decode(template_string)
+    values_string = '{"value_1", "[{"value_1_1", "value_2_1"},{"value_1_2","value_2_2"}]'
+    expected = {
+        'key_1': 'value_1',
+        'key_2': [
+            {
+                'array_key_1': 'value_1_1',
+                'array_key_2': 'value_2_1'
+            },
+            {
+                'array_key_1': 'value_1_2',
+                'array_key_2': 'value_2_2'
+            }
+        ]
+    }
+    values = JSVObjectValues('value_1', JSVArrayValues(
+        JSVObjectValues("value_1_1", "value_2_1"),
+        JSVObjectValues("value_1_2", "value_2_2")))
+    out = template.expand(values)
+    assert out == expected
