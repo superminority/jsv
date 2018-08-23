@@ -1,5 +1,5 @@
 import pytest
-from .template import JSVObjectValues, JSVArrayValues, JSVObjectKeys, JSVArrayDef, JSVDecoder
+from .template import JSVObjectValues, JSVArrayValues, JSVObjectTemplate, JSVArrayTemplate, JSVTemplateDecoder, JSVRecordDecoder
 
 
 def test_record_dict():
@@ -22,7 +22,7 @@ def test_dict_expand():
     rd_values = ["value_1", 2, None]
     rd = JSVArrayValues(*rd_values)
     rd_keys = ["key_1", "key_2", "key_3"]
-    rdk = JSVObjectKeys(*rd_keys)
+    rdk = JSVObjectTemplate(*rd_keys)
     dct = rdk.expand(rd)
     for k, v in zip(rd_keys, rd_values):
         assert dct[k] == v
@@ -39,34 +39,34 @@ def test_array_expand():
         'values': JSVArrayValues(*[JSVObjectValues(*dvals.values()) for dvals in expected])
     }
 
-    ad = JSVArrayDef(JSVObjectKeys(*input['keys']))
+    ad = JSVArrayTemplate(JSVObjectTemplate(*input['keys']))
     assert ad.expand(input['values']) == expected
 
 
 def test_decode_simple_keys():
     template_string = '{"key_1","key_2","key_3"}'
-    expected = JSVObjectKeys('key_1', 'key_2', 'key_3')
-    out = JSVDecoder().decode(template_string)
+    expected = JSVObjectTemplate('key_1', 'key_2', 'key_3')
+    out = JSVTemplateDecoder().decode(template_string)
     assert out == expected
 
 
 def test_decode_simple_array():
     template_string = '[{"key_1","key_2"}]'
-    expected = JSVArrayDef(JSVObjectKeys('key_1', 'key_2'))
-    out = JSVDecoder().decode(template_string)
+    expected = JSVArrayTemplate(JSVObjectTemplate('key_1', 'key_2'))
+    out = JSVTemplateDecoder().decode(template_string)
     assert out == expected
 
 
 def test_decode_keys_with_array():
     template_string = '{"key_1","key_2":[{"array_key_1","array_key_2"}]}'
-    expected = JSVObjectKeys("key_1", ("key_2", JSVArrayDef(JSVObjectKeys('array_key_1', 'array_key_2'))))
-    out = JSVDecoder().decode(template_string)
+    expected = JSVObjectTemplate("key_1", ("key_2", JSVArrayTemplate(JSVObjectTemplate('array_key_1', 'array_key_2'))))
+    out = JSVTemplateDecoder().decode(template_string)
     assert out == expected
 
-def test_decode_values_with_array():
+
+def test_expand_dict_with_array():
     template_string = '{"key_1","key_2":[{"array_key_1","array_key_2"}]}'
-    template = JSVDecoder().decode(template_string)
-    values_string = '{"value_1", "[{"value_1_1", "value_2_1"},{"value_1_2","value_2_2"}]'
+    template = JSVTemplateDecoder().decode(template_string)
     expected = {
         'key_1': 'value_1',
         'key_2': [
@@ -84,4 +84,11 @@ def test_decode_values_with_array():
         JSVObjectValues("value_1_1", "value_2_1"),
         JSVObjectValues("value_1_2", "value_2_2")))
     out = template.expand(values)
+    assert out == expected
+
+
+def test_decode_record_object():
+    record_string = '{"value_1","value_2", 3}'
+    expected = JSVObjectValues('value_1', 'value_2', 3)
+    out = JSVRecordDecoder().decode(record_string)
     assert out == expected
