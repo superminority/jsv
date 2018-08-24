@@ -92,3 +92,9 @@ def test_decode_record_object():
     expected = JSVObjectValues('value_1', 'value_2', 3)
     out = JSVRecordDecoder().decode(record_string)
     assert out == expected
+
+def test_decode_empty_record_object():
+    recort_string = '{ }'
+    expected = JSVObjectValues()
+    out = JSVRecordDecoder().decode(recort_string)
+    assert out == expected
