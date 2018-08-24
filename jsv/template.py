@@ -82,8 +82,36 @@ def check_value_type(val):
     if isinstance(val, JSVObjectValues) or isinstance(val, JSVArrayValues) or isinstance(val, int) or isinstance(val, float) or\
             isinstance(val, str) or isinstance(val, bool) or val is None:
         return
+    elif isinstance(val, dict):
+        for v in val.values():
+            e = check_nested_json(v)
+            if isinstance(v, Exception):
+                return e
+    elif isinstance(val, list):
+        for v in val:
+            e = check_nested_json(v)
+            if isinstance(v, Exception):
+                return e
+    else:
+        return TypeError('RecordDict argument must be another RecordDict, a RecordList, or a json type')
 
-    return TypeError('RecordDict argument must be another RecordDict, a RecordList, or a json primitive type')
+
+def check_nested_json(val):
+    if isinstance(val, int) or isinstance(val, float) or\
+            isinstance(val, str) or isinstance(val, bool) or val is None:
+        return
+    elif isinstance(val, dict):
+        for v in val.values():
+            e = check_nested_json(v)
+            if isinstance(v, Exception):
+                return e
+    elif isinstance(val, list):
+        for v in val:
+            e = check_nested_json(v)
+            if isinstance(v, Exception):
+                return e
+    else:
+        return TypeError('RecordDict argument must be another RecordDict, a RecordList, or a json type')
 
 
 class JSVJsonObject:
@@ -500,7 +528,7 @@ def parse_record_object(s_and_end, strict, scan_once, object_hook, object_pairs_
             try:
                 nextchar = s[end]
             except IndexError:
-                raise JSONDecodeError("Expecting string")
+                raise JSONDecodeError("Expecting a string")
             if nextchar in _ws:
                 end = _w(s, end).end()
                 nextchar = s[end:end + 1]
@@ -509,6 +537,9 @@ def parse_record_object(s_and_end, strict, scan_once, object_hook, object_pairs_
             end += 1
             value, end = scanstring(s, end, strict)
             values.append(value)
+        # elif nextchar == '"':
+        #     ""
+
         else:
             try:
                 value, end = scan_once(s, end)
@@ -530,27 +561,29 @@ def parse_record_object(s_and_end, strict, scan_once, object_hook, object_pairs_
             return values, end + 1
 
         if nextchar != ',':
+            print(nextchar)
+            print(end)
+            print(s)
             raise JSONDecodeError("Expecting ',' delimiter")
         end += 1
 
 
 def parse_record_array(s_and_end, scan_once, _w=WHITESPACE.match, _ws=WHITESPACE_STR):
     s, end = s_and_end
-    values = []
+    values = JSVArrayValues()
     nextchar = s[end:end + 1]
     if nextchar in _ws:
         end = _w(s, end + 1).end()
         nextchar = s[end:end + 1]
     # Look-ahead for trivial empty array
     if nextchar == ']':
-        return JSVArrayTemplate(*values), end + 1
-    _append = values.append
+        return values, end + 1
     while True:
         try:
             value, end = scan_once(s, end)
         except StopIteration as err:
             raise JSONDecodeError("Expecting value", s, err.value) from None
-        _append(value)
+        values.append(value)
         nextchar = s[end:end + 1]
         if nextchar in _ws:
             end = _w(s, end + 1).end()
@@ -568,7 +601,7 @@ def parse_record_array(s_and_end, scan_once, _w=WHITESPACE.match, _ws=WHITESPACE
         except IndexError:
             pass
 
-    return JSVArrayTemplate(*values), end
+    return values, end
 
 
 class JSVRecordDecoder(object):
