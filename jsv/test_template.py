@@ -88,7 +88,7 @@ def test_expand_dict_with_array():
 
 
 def test_decode_record_object():
-    record_string = '{"value_1","value_2", 3}'
+    record_string = '{:"value_1",:"value_2", 3}'
     expected = JSVObjectValues('value_1', 'value_2', 3)
     out = JSVRecordDecoder().decode(record_string)
     assert out == expected

@@ -470,7 +470,7 @@ class JSVTemplateDecoder(object):
 def parse_record_object(s_and_end, strict, scan_once, object_hook, object_pairs_hook,
                           memo=None, _w=WHITESPACE.match, _ws=WHITESPACE_STR):
     s, end = s_and_end
-    keys = JSVObjectValues()
+    values = JSVObjectValues()
     # Backwards compatibility
     if memo is None:
         memo = {}
@@ -478,80 +478,60 @@ def parse_record_object(s_and_end, strict, scan_once, object_hook, object_pairs_
     # Use a slice to prevent IndexError from being raised, the following
     # check will raise a more specific ValueError if the string is empty
     nextchar = s[end:end + 1]
-    if nextchar != '"':
+    if nextchar in _ws:
+        end = _w(s, end).end()
+        nextchar = s[end:end + 1]
+
+    if nextchar == '}':
+        if object_pairs_hook is not None:
+            result = object_pairs_hook(values)
+            return result, end + 1
+        if object_hook is not None:
+            values = object_hook(values)
+        return values, end + 1
+
+    while True:
+        nextchar = s[end:end + 1]
         if nextchar in _ws:
             end = _w(s, end).end()
             nextchar = s[end:end + 1]
-        # Trivial empty object
+        if nextchar == ':':
+            end += 1
+            try:
+                nextchar = s[end]
+            except IndexError:
+                raise JSONDecodeError("Expecting string")
+            if nextchar in _ws:
+                end = _w(s, end).end()
+                nextchar = s[end:end + 1]
+            if nextchar != '"':
+                raise JSONDecodeError("Expecting a string")
+            end += 1
+            value, end = scanstring(s, end, strict)
+            values.append(value)
+        else:
+            try:
+                value, end = scan_once(s, end)
+            except StopIteration as err:
+                raise JSONDecodeError("Expecting value", s, err.value) from None
+            values.append(value)
+
+        nextchar = s[end:end + 1]
+        if nextchar in _ws:
+            end = _w(s, end).end()
+            nextchar = s[end:end + 1]
+
         if nextchar == '}':
             if object_pairs_hook is not None:
-                result = object_pairs_hook(keys)
+                result = object_pairs_hook(values)
                 return result, end + 1
-            keys = {}
             if object_hook is not None:
-                keys = object_hook(keys)
-            return keys, end + 1
-        elif nextchar != '"':
-            raise JSONDecodeError(
-                "Expecting property name enclosed in double quotes", s, end)
-    end += 1
-    while True:
-        key, end = scanstring(s, end, strict)
-        if key in keys:
-            raise KeyError('Cannot have duplicate key in dictionary')
-        try:
-            nextchar = s[end]
-            if nextchar in _ws:
-                end = _w(s, end + 1).end()
-                nextchar = s[end]
-        except IndexError:
-            nextchar = ''
-        end += 1
+                values = object_hook(values)
+            return values, end + 1
 
-        if nextchar == ':':
-            try:
-                if s[end] in _ws:
-                    end += 1
-                    if s[end] in _ws:
-                        end = _w(s, end + 1).end()
-            except IndexError:
-                pass
-            try:
-                template, end = scan_once(s, end)
-            except StopIteration as err:
-                raise JSONDecodeError("Expecting template", s, err.value) from None
-            key = (key, template)
-            try:
-                nextchar = s[end]
-                if nextchar in _ws:
-                    end = _w(s, end + 1).end()
-                    nextchar = s[end]
-            except IndexError:
-                nextchar = ''
-            end += 1
-
-        if nextchar == '}':
-            keys.append(key)
-            break
-        elif nextchar == ',':
-            keys.append(key)
-        elif nextchar != ',':
-            raise JSONDecodeError("Expecting ',' delimiter", s, end - 1)
-        end = _w(s, end).end()
-        try:
-            nextchar = s[end:end + 1]
-        except IndexError:
-            nextchar = ''
+        if nextchar != ',':
+            raise JSONDecodeError("Expecting ',' delimiter")
         end += 1
-        if nextchar != '"':
-            raise JSONDecodeError(
-                "Expecting property name enclosed in double quotes", s, end - 1)
-    if object_pairs_hook is not None:
-        result = object_pairs_hook(keys)
-        return result, end
-    if object_hook is not None:
-        keys = object_hook(keys)
-    return keys, end
 
 
 def parse_record_array(s_and_end, scan_once, _w=WHITESPACE.match, _ws=WHITESPACE_STR):
