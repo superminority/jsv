@@ -4,6 +4,7 @@ from .scanner import py_make_scanner as make_scanner
 class JSVObjectValues:
     def __init__(self, *args):
         self._values = []
+        self._named_pairs = {}
         for v in args:
             self.append(v)
 
@@ -48,10 +49,34 @@ class JSVObjectValues:
             out = self._values[key]
         except IndexError:
             raise IndexError('JSVObjectKeys index out of range') from None
+        except TypeError:
+            try:
+                out = self._named_pairs[key]
+            except IndexError:
+                raise IndexError("key '{}' not found".format(key)) from None
+            except TypeError:
+                raise TypeError('key must be a string or an integer') from None
+            except Exception:
+                raise
         except Exception:
             raise
 
         return out
+
+    def __setitem__(self, key, value):
+        try:
+            self._values[key] = value
+        except IndexError:
+            raise IndexError('JSVObjectKeys index out of range') from None
+        except TypeError:
+            try:
+                self._named_pairs[key] = value
+            except TypeError:
+                raise TypeError('key must be a string or an integer') from None
+            except Exception:
+                raise
+        except Exception:
+            raise
 
 
 class JSVArrayValues:
