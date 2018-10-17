@@ -145,10 +145,8 @@ class JSVJsonObject:
 
 
 class JSVObjectTemplate:
-    def __init__(self, *args):
+    def __init__(self):
         self._values = []
-        for k in args:
-            self.append(k)
 
     def append(self, obj):
         e = check_key_element_type(obj)
@@ -205,30 +203,26 @@ class JSVObjectTemplate:
 
         return out
 
-    def __str__(self):
+    def __repr__(self):
         strs = []
         for k in self._values:
             if isinstance(k, str):
                 strs.append('"{}"'.format(k))
             else:
-                strs.append('"{0}":{1}'.format(k[0], str(k[1])))
+                strs.append('"{0}":{1}'.format(k[0], repr(k[1])))
 
         return '{{{}}}'.format(','.join(strs))
 
 
 class JSVArrayTemplate:
-    def __init__(self, *args):
+    def __init__(self):
         self._values = []
-        for obj in args:
-            e = check_arraydef_arg_type(obj)
-            if e:
-                raise e
 
-        for obj in args:
-            self._values.append(obj)
-
-        if len(args) == 0:
-            self._values = [JSVJsonObject()]
+    def append(self, obj):
+        e = check_key_element_type(obj)
+        if e:
+            raise e
+        self._values.append(obj)
 
     def __iter__(self):
         self._index = 0
@@ -277,10 +271,10 @@ class JSVArrayTemplate:
 
         return out
 
-    def __str__(self):
+    def __repr__(self):
         strs = []
         for k in self._values:
-            strs.append(str(k))
+            strs.append(repr(k))
 
         return '[{}]'.format(','.join(strs))
 
