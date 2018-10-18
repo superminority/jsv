@@ -145,8 +145,10 @@ class JSVJsonObject:
 
 
 class JSVObjectTemplate:
-    def __init__(self):
+    def __init__(self, *args):
         self._values = []
+        for v in args:
+            self.append(v)
 
     def append(self, obj):
         e = check_key_element_type(obj)
@@ -215,11 +217,13 @@ class JSVObjectTemplate:
 
 
 class JSVArrayTemplate:
-    def __init__(self):
+    def __init__(self, *args):
         self._values = []
+        for v in args:
+            self.append(v)
 
     def append(self, obj):
-        e = check_key_element_type(obj)
+        e = check_arraydef_arg_type(obj)
         if e:
             raise e
         self._values.append(obj)

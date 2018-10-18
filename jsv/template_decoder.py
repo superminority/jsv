@@ -2,8 +2,11 @@ from enum import Enum, auto, unique
 from re import compile
 from .template import JSVArrayTemplate, JSVObjectTemplate
 
+
 @unique
 class States(Enum):
+    DONE = auto()
+    EXPECT_ARRAY_OR_OBJECT_OR_ARRAY_CLOSE = auto()
     EXPECT_ARRAY_OR_OBJECT = auto()
     ARRAY_NEXT_OR_CLOSE = auto()
     OBJECT_AFTER_KEY = auto()
@@ -13,7 +16,6 @@ class States(Enum):
     STRING_HEX = auto()
     EXPECT_QUOTE_OR_CLOSE = auto()
     EXPECT_QUOTE = auto()
-    DONE = auto()
 
 
 hex_re = compile('[0-9a-fA-F]')
@@ -36,8 +38,9 @@ class TemplateDecoder:
         print('current char: {0}, state: {1}'.format(self.current_char, str(self.state)))
         print(self.stack)
         if self.state is not States.DONE:
-            raise RuntimeError('Reached end of string before end of template')
+            raise ValueError('Reached end of string before end of template')
 
+    @property
     def remainder(self):
         return ''.join(reversed(self.char_list))
 
@@ -47,7 +50,38 @@ class TemplateDecoder:
         try:
             self.current_char = self.char_list.pop()
         except IndexError:
-            raise IndexError('End of string reached unexpectedly')
+            raise ValueError('End of string reached unexpectedly')
+        if self.state is States.EXPECT_ARRAY_OR_OBJECT_OR_ARRAY_CLOSE:
+            if self.current_char.isspace():
+                return
+            if self.current_char == '{':
+                n = JSVObjectTemplate()
+                self.current = n
+                self.stack.append(self.current)
+                self.state = States.EXPECT_QUOTE_OR_CLOSE
+                return
+            if self.current_char == '[':
+                self.current = JSVArrayTemplate()
+                self.stack.append(self.current)
+                self.state = States.ARRAY_NEXT_OR_CLOSE
+                return
+            if self.current_char == ']':
+                v = self.stack.pop()
+                if self.stack:
+                    self.current = self.stack[-1]
+                    if isinstance(self.current, str):
+                        k = self.stack.pop()
+                        self.current = self.stack[-1]
+                        self.current.append((k, v))
+                        self.state = States.OBJECT_NEXT_OR_CLOSE
+                        return
+                    elif isinstance(self.current, JSVArrayTemplate):
+                        self.current.append(v)
+                        return
+                else:
+                    self.current = v
+                    self.state = States.DONE
+            raise ValueError('Expecting ')
         if self.state is States.EXPECT_ARRAY_OR_OBJECT:
             if self.current_char.isspace():
                 return
@@ -62,7 +96,7 @@ class TemplateDecoder:
             if self.current_char == '[':
                 self.current = JSVArrayTemplate()
                 self.stack.append(self.current)
-                self.state = States.ARRAY_NEXT_OR_CLOSE
+                self.state = States.EXPECT_ARRAY_OR_OBJECT_OR_ARRAY_CLOSE
                 return
             raise ValueError('Expecting ')
         elif self.state is States.ARRAY_NEXT_OR_CLOSE:
@@ -91,7 +125,7 @@ class TemplateDecoder:
             if self.current_char.isspace():
                 return
             if self.current_char == ',':
-                k = self.current
+                k = self.stack.pop()
                 self.current = self.stack[-1]
                 self.current.append(k)
                 self.state = States.EXPECT_QUOTE
@@ -109,11 +143,13 @@ class TemplateDecoder:
                         k2 = self.stack.pop()
                         self.current = self.stack[-1]
                         self.current.append((k2, v))
-                        self.state = States.OBJECT_NEXT_OR_CLOSE
-                        return
                     else:
                         self.current.append(v)
-                        return
+                    if isinstance(self.current, JSVObjectTemplate):
+                        self.state = States.OBJECT_NEXT_OR_CLOSE
+                    else:
+                        self.state = States.ARRAY_NEXT_OR_CLOSE
+                    return
                 else:
                     self.current = v
                     self.state = States.DONE
@@ -220,6 +256,6 @@ class TemplateDecoder:
                 return
             if self.current_char == '"':
                 self.current = []
-                self.stack.push(self.current)
+                self.stack.append(self.current)
                 self.state = States.STRING_NEXT_OR_CLOSE
                 return
