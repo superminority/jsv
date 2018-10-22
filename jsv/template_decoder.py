@@ -63,7 +63,6 @@ class TemplateDecoder:
             if self.current_char == '[':
                 self.current = JSVArrayTemplate()
                 self.stack.append(self.current)
-                self.state = States.ARRAY_NEXT_OR_CLOSE
                 return
             if self.current_char == ']':
                 v = self.stack.pop()
