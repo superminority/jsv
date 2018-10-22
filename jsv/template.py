@@ -1,6 +1,7 @@
 from .decoder import scanstring, JSONDecodeError, WHITESPACE, WHITESPACE_STR, _CONSTANTS
 from .scanner import py_make_scanner as make_scanner
 
+
 class JSVObjectValues:
     def __init__(self, *args):
         self._values = []
