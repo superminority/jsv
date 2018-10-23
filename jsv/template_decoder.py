@@ -1,5 +1,7 @@
 from enum import Enum, auto, unique
 from re import compile
+import json
+
 from .template import JSVArrayTemplate, JSVObjectTemplate
 
 
@@ -21,6 +23,12 @@ class States(Enum):
 hex_re = compile('[0-9a-fA-F]')
 
 
+def json_remainder(s):
+    d = json.JSONDecoder()
+    v, r = d.raw_decode(s)
+    return v, s[r:].lstrip()
+
+
 class TemplateDecoder:
 
     def __init__(self, s):
@@ -29,6 +37,67 @@ class TemplateDecoder:
         self.stack = []
         self.current = None
         self.current_char = None
+
+    def expect_object(self, rec, template, parent):
+        rem = rec
+        if rem[0] != '{':
+            raise ValueError('Expecting object')
+        rem = rem[1:].lstrip()
+        for i, k in enumerate(template):
+            if i != 0:
+                if rem[0] != ',':
+                    raise ValueError('Expecting `,`')
+                rem = rem[1:].lstrip()
+            if isinstance(k, str):
+                obj, rem = json_remainder(rem)
+                parent[k] = obj
+            elif isinstance(k[1], JSVObjectTemplate):
+                parent[k[0]], rem = self.expect_object(rem, k[1], {})
+            elif isinstance(k[1], JSVArrayTemplate):
+                parent[k[0]], rem = self.expect_array(rem, k[1], [])
+        if rem[0] != '}':
+            raise ValueError('Expecting `}`')
+        return parent, rem[1:].lstrip()
+
+    def expect_array(self, rec, template, parent):
+        rem = rec
+        if rem[0] != '[':
+            raise ValueError('Expecting `[`')
+        rem = rem[1:].lstrip()
+        k_iter = iter(template)
+        k = None
+        after_first = True
+        cont_iter = True
+        while rem[0] != ']':
+            if cont_iter:
+                try:
+                    k = next(k_iter)
+                except StopIteration:
+                    cont_iter = False
+            if after_first:
+                if rem[0] != ',':
+                    raise ValueError('Expecting `,`')
+                rem = rem[1:].lstrip()
+                after_first = False
+            if k is None:
+                tmp, rem = json_remainder(rem)
+            if isinstance(k, JSVObjectTemplate):
+                tmp, rem = self.expect_object(rem, k, {})
+                parent.append(tmp)
+            if isinstance(k, JSVArrayTemplate):
+                tmp, rem = self.expect_array(rem, k, [])
+                parent.append(tmp)
+        return parent, rem[1:].lstrip()
+
+    def parse_record(self, rec):
+        remainder = rec.lstrip()
+        template = self.current
+        if template is None:
+            return json.dumps(rec)
+        if isinstance(template, JSVObjectTemplate):
+            return self.expect_object(remainder, template, {})
+        if isinstance(template, JSVArrayTemplate):
+            return self.expect_array(remainder, template, [])
 
     def advance_all(self):
         while self.state is not States.DONE:
