@@ -66,9 +66,10 @@ class TemplateDecoder:
         rem = rem[1:].lstrip()
         k_iter = iter(template)
         k = None
-        after_first = True
+        after_first = False
         cont_iter = True
         while rem[0] != ']':
+            print(rem)
             if cont_iter:
                 try:
                     k = next(k_iter)
@@ -78,9 +79,10 @@ class TemplateDecoder:
                 if rem[0] != ',':
                     raise ValueError('Expecting `,`')
                 rem = rem[1:].lstrip()
-                after_first = False
+            after_first = True
             if k is None:
                 tmp, rem = json_remainder(rem)
+                parent.append(tmp)
             if isinstance(k, JSVObjectTemplate):
                 tmp, rem = self.expect_object(rem, k, {})
                 parent.append(tmp)
@@ -95,9 +97,11 @@ class TemplateDecoder:
         if template is None:
             return json.dumps(rec)
         if isinstance(template, JSVObjectTemplate):
-            return self.expect_object(remainder, template, {})
+            obj, _ = self.expect_object(remainder, template, {})
+            return obj
         if isinstance(template, JSVArrayTemplate):
-            return self.expect_array(remainder, template, [])
+            obj, _ = self.expect_array(remainder, template, [])
+            return obj
 
     def advance_all(self):
         while self.state is not States.DONE:
