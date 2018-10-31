@@ -24,6 +24,10 @@ class TemplateStates(Enum):
 class RecordStates(Enum):
     DONE = auto()
     EXPECT_LITERAL = auto()
+    EXPECT_OBJECT_START = auto()
+    EXPECT_OBJECT_END = auto()
+    EXPECT_ARRAY_START = auto()
+    EXPECT_ARRAY_END = auto()
 
 
 hex_re = compile('[0-9a-fA-F]')
@@ -303,7 +307,37 @@ class Template:
         self._remainder = ''.join(reversed(char_list))
         rs = []
 
-        for t in self._root:
-            if isinstance(t, str):
-                rs.append((RecordStates.EXPECT_LITERAL, t))
+        if isinstance(self._root, JSVObjectTemplate):
+            self.linearize_object(self._root, rs)
+        elif isinstance(self._root, JSVArrayTemplate):
+            self.linearize_array(self._root, rs)
+        elif self._root is None:
+            rs = [RecordStates.EXPECT_LITERAL]
 
+        self._record_states = tuple(rs)
+
+    @staticmethod
+    def linearize_object(t, a):
+        for v in t:
+            if isinstance(v, str):
+                a.append((RecordStates.EXPECT_LITERAL, v))
+            elif isinstance(v[1], JSVObjectTemplate):
+                a.append((RecordStates.EXPECT_OBJECT_START, v[0]))
+                Template.linearize_object(v[1], a)
+            elif isinstance(v[1], JSVArrayTemplate):
+                a.append((RecordStates.EXPECT_ARRAY_START, v[0]))
+                Template.linearize_array(v[1], a)
+        a.append(RecordStates.EXPECT_OBJECT_END)
+
+    @staticmethod
+    def linearize_array(t, a):
+        for v in t:
+            if v is None:
+                a.append(RecordStates.EXPECT_LITERAL)
+            elif isinstance(v, JSVObjectTemplate):
+                a.append(RecordStates.EXPECT_OBJECT_START)
+                Template.linearize_object(v, a)
+            elif isinstance(v, JSVArrayTemplate):
+                a.append(RecordStates.EXPECT_ARRAY_START)
+                Template.linearize_array(v, a)
+        a.append(RecordStates.EXPECT_ARRAY_END)
