@@ -1,5 +1,5 @@
 from .template import JSVObjectTemplate, JSVArrayTemplate
-from .template_decoder import TemplateDecoder, States
+from .template_decoder import Template
 import pytest
 
 
@@ -17,21 +17,17 @@ wellformed = [
 ]
 
 malformed = [
-    ('{"key_1"', ValueError, 'End of string reached unexpectedly')
+    ('{"key_1"', IndexError, 'End of string reached unexpectedly')
 ]
 
 
 @pytest.mark.parametrize('template_string, expected', wellformed)
-def test_decode_template(template_string, expected):
-    decoder = TemplateDecoder(template_string)
-    decoder.advance_all()
-    assert decoder.current == expected
-    assert decoder.remainder == ''
-    assert decoder.state == States.DONE
+def test_template_object(template_string, expected):
+    obj = Template(template_string)
+    assert obj._root == expected
 
 
 @pytest.mark.parametrize('template_string, ex, msg', malformed)
-def test_exception_template(template_string, ex, msg):
-    decoder = TemplateDecoder(template_string)
+def test_template_ex(template_string, ex, msg):
     with pytest.raises(ex, message=msg):
-        decoder.advance_all()
+        Template(template_string)
