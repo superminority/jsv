@@ -13,7 +13,8 @@ wellformed = [
     ('{"key_1","key_2","key_3","key_4"}', JSVObjectTemplate('key_1', 'key_2', 'key_3', 'key_4')),
     ('    \t{"key_1"  \n,"key_2", \r"key_3", "key_4"}', JSVObjectTemplate('key_1', 'key_2', 'key_3', 'key_4')),
     ('{"key_1":[[{"key_2","key_3"}]]}',
-        JSVObjectTemplate(('key_1', JSVArrayTemplate(JSVArrayTemplate(JSVObjectTemplate('key_2', 'key_3')))))),
+        JSVObjectTemplate(('key_1', JSVArrayTemplate(JSVArrayTemplate(JSVObjectTemplate('key_2', 'key_3'))))))
+   # ('{"key_1":{"key_1_1"},"key_2"}', JSVObjectTemplate('key_1'))
 ]
 
 malformed = [

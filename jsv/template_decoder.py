@@ -22,12 +22,17 @@ class TemplateStates(Enum):
 
 @unique
 class RecordStates(Enum):
-    DONE = auto()
     EXPECT_LITERAL = auto()
     EXPECT_OBJECT_START = auto()
     EXPECT_OBJECT_END = auto()
     EXPECT_ARRAY_START = auto()
     EXPECT_ARRAY_END = auto()
+
+
+@unique
+class ParentStates(Enum):
+    ARRAY = auto()
+    OBJECT = auto()
 
 
 hex_re = compile('[0-9a-fA-F]')
@@ -39,9 +44,31 @@ def json_remainder(s):
     return v, s[r:].lstrip()
 
 
+def err_msg(msg, i, c):
+    return '{0} @ index: {1}, character: {2}'.format(msg, i, c)
+
+
 class Template:
     def parse_record(self, s):
+        current_char = None
         char_list = list(reversed(s))
+        state = self._record_states[0]
+        i = 0
+
+        while True:
+            try:
+                current_char = char_list.pop()
+            except IndexError:
+                raise IndexError(err_msg('End of string reached unexpectedly', i, current_char))
+            i += 1
+
+        if state is RecordStates.EXPECT_LITERAL:
+            pass
+            # Get literal object
+
+        elif state is RecordStates.EXPECT_ARRAY_START:
+            pass
+
 
     @property
     def remainder(self):
@@ -55,14 +82,17 @@ class Template:
         if isinstance(s, str):
             state = TemplateStates.EXPECT_ARRAY_OR_OBJECT
             char_list = list(reversed(s))
-            stack = []
-            current_obj = None
+            parent_stack = []
+            record_states = []
+            i = -1
+            current_char = None
 
             while state is not TemplateStates.DONE:
                 try:
                     current_char = char_list.pop()
                 except IndexError:
-                    raise IndexError('End of string reached unexpectedly')
+                    raise IndexError(err_msg('End of string reached unexpectedly', i, current_char))
+                i += 1
 
                 # --------------------------------------------
                 # State: EXPECT_ARRAY_OR_OBJECT_OR_ARRAY_CLOSE
@@ -71,29 +101,24 @@ class Template:
                     if current_char.isspace():
                         pass
                     elif current_char == '{':
-                        n = JSVObjectTemplate()
-                        current_obj = n
-                        stack.append(current_obj)
+                        parent_stack.append(ParentStates.OBJECT)
+                        record_states.append(RecordStates.EXPECT_OBJECT_START)
                         state = TemplateStates.EXPECT_QUOTE_OR_CLOSE
                     elif current_char == '[':
-                        current_obj = JSVArrayTemplate()
-                        stack.append(current_obj)
+                        parent_stack.append(ParentStates.ARRAY)
+                        record_states.append(RecordStates.EXPECT_ARRAY_START)
                     elif current_char == ']':
-                        v = stack.pop()
-                        if stack:
-                            current_obj = stack[-1]
-                            if isinstance(current_obj, str):
-                                k = stack.pop()
-                                current_obj = stack[-1]
-                                current_obj.append((k, v))
+                        parent_stack.pop()
+                        record_states.append(RecordStates.EXPECT_ARRAY_END)
+                        if parent_stack:
+                            if parent_stack[-1] is ParentStates.OBJECT:
                                 state = TemplateStates.OBJECT_NEXT_OR_CLOSE
-                            elif isinstance(current_obj, JSVArrayTemplate):
-                                current_obj.append(v)
+                            else:
+                                state = TemplateStates.ARRAY_NEXT_OR_CLOSE
                         else:
-                            current_obj = v
                             state = TemplateStates.DONE
                     else:
-                        raise ValueError('Expecting `{`, `[` or `]`')
+                        raise ValueError(err_msg('Expecting `{`, `[` or `]`', i, current_char))
 
                 # -----------------------------
                 # State: EXPECT_ARRAY_OR_OBJECT
@@ -102,18 +127,15 @@ class Template:
                     if current_char.isspace():
                         pass
                     elif current_char == '{':
-                        n = JSVObjectTemplate()
-                        if current_obj and isinstance(current_obj, JSVArrayTemplate):
-                            current_obj.append(n)
-                        current_obj = n
-                        stack.append(current_obj)
+                        parent_stack.append(ParentStates.OBJECT)
+                        record_states.append(RecordStates.EXPECT_OBJECT_START)
                         state = TemplateStates.EXPECT_QUOTE_OR_CLOSE
                     elif current_char == '[':
-                        current_obj = JSVArrayTemplate()
-                        stack.append(current_obj)
+                        parent_stack.append(ParentStates.ARRAY)
+                        record_states.append(RecordStates.EXPECT_ARRAY_START)
                         state = TemplateStates.EXPECT_ARRAY_OR_OBJECT_OR_ARRAY_CLOSE
                     else:
-                        raise ValueError('Expecting `{` or `[`')
+                        raise ValueError(err_msg('Expecting `{` or `[`', i, current_char))
 
                 # --------------------------
                 # State: ARRAY_NEXT_OR_CLOSE
@@ -124,21 +146,17 @@ class Template:
                     elif current_char == ',':
                         state = TemplateStates.EXPECT_ARRAY_OR_OBJECT
                     elif current_char == ']':
-                        v = stack.pop()
-                        if stack:
-                            current_obj = stack[-1]
-                            if isinstance(current_obj, str):
-                                k = stack.pop()
-                                current_obj = stack[-1]
-                                current_obj.append((k, v))
+                        parent_stack.pop()
+                        record_states.append(RecordStates.EXPECT_ARRAY_END)
+                        if parent_stack:
+                            if parent_stack[-1] is ParentStates.OBJECT:
                                 state = TemplateStates.OBJECT_NEXT_OR_CLOSE
-                            elif isinstance(current_obj, JSVArrayTemplate):
-                                current_obj.append(v)
+                            else:
+                                state = TemplateStates.ARRAY_NEXT_OR_CLOSE
                         else:
-                            current_obj = v
                             state = TemplateStates.DONE
                     else:
-                        raise ValueError('Expecting `,` or `]`')
+                        raise ValueError(err_msg('Expecting `,` or `]`', i, current_char))
 
                 # -----------------------
                 # State: OBJECT_AFTER_KEY
@@ -147,33 +165,21 @@ class Template:
                     if current_char.isspace():
                         pass
                     elif current_char == ',':
-                        k = stack.pop()
-                        current_obj = stack[-1]
-                        current_obj.append(k)
                         state = TemplateStates.EXPECT_QUOTE
                     elif current_char == ':':
                         state = TemplateStates.EXPECT_ARRAY_OR_OBJECT
                     elif current_char == '}':
-                        k = stack.pop()
-                        v = stack.pop()
-                        v.append(k)
-                        if stack:
-                            current_obj = stack[-1]
-                            if isinstance(current_obj, str):
-                                k2 = stack.pop()
-                                current_obj = stack[-1]
-                                current_obj.append((k2, v))
-                            else:
-                                current_obj.append(v)
-                            if isinstance(current_obj, JSVObjectTemplate):
+                        parent_stack.pop()
+                        record_states.append(RecordStates.EXPECT_OBJECT_END)
+                        if parent_stack:
+                            if parent_stack[-1] is ParentStates.OBJECT:
                                 state = TemplateStates.OBJECT_NEXT_OR_CLOSE
                             else:
                                 state = TemplateStates.ARRAY_NEXT_OR_CLOSE
                         else:
-                            current_obj = v
                             state = TemplateStates.DONE
                     else:
-                        raise ValueError('Expecting `,`, `:`, or `}`')
+                        raise ValueError(err_msg('Expecting `,`, `:`, or `}`', i, current_char))
 
                 # ---------------------------
                 # State: OBJECT_NEXT_OR_CLOSE
@@ -182,82 +188,70 @@ class Template:
                     if current_char.isspace():
                         pass
                     elif current_char == ',':
-                        v = current_obj
-                        current_obj = stack[-1]
-                        current_obj.append(v)
-                        state = TemplateStates.EXPECT_ARRAY_OR_OBJECT
+                        state = TemplateStates.EXPECT_QUOTE
                     elif current_char == '}':
-                        v = stack.pop()
-                        if stack:
-                            current_obj = stack[-1]
-                            if isinstance(current_obj, str):
-                                k = stack.pop()
-                                current_obj = stack[-1]
-                                current_obj.append((k, v))
-                            elif isinstance(current_obj, JSVArrayTemplate):
-                                current_obj.append(v)
+                        parent_stack.pop()
+                        record_states.append(RecordStates.EXPECT_OBJECT_END)
+                        if parent_stack:
+                            if parent_stack[-1] is ParentStates.ARRAY:
                                 state = TemplateStates.ARRAY_NEXT_OR_CLOSE
                         else:
                             state = TemplateStates.DONE
                     else:
-                        raise ValueError('Expecting `,` or `}`')
+                        raise ValueError(err_msg('Expecting `,` or `}`', i, current_char))
 
                 # ---------------------------
                 # State: STRING_NEXT_OR_CLOSE
                 # ---------------------------
                 elif state is TemplateStates.STRING_NEXT_OR_CLOSE:
                     if current_char == '"':
-                        v = stack.pop()
-                        stack.append(''.join(v))
-                        current_obj = stack[-1]
+                        k = ''.join(string_array)
+                        record_states.append(k)
                         state = TemplateStates.OBJECT_AFTER_KEY
                     elif current_char == '\\':
                         state = TemplateStates.STRING_ESCAPE
                     else:
-                        current_obj.append(current_char)
+                        string_array.append(current_char)
 
                 # --------------------
                 # State: STRING_ESCAPE
                 # --------------------
                 elif state is TemplateStates.STRING_ESCAPE:
                     if current_char == '"':
-                        current_obj.append('"')
+                        string_array.append('"')
                     elif current_char == '\\':
-                        current_obj.append('\\')
+                        string_array.append('\\')
                     elif current_char == '/':
-                        current_obj.append('/')
+                        string_array.append('/')
                     elif current_char == 'b':
-                        current_obj.append('\b')
+                        string_array.append('\b')
                     elif current_char == 'f':
-                        current_obj.append('\f')
+                        string_array.append('\f')
                     elif current_char == 'n':
-                        current_obj.append('\n')
+                        string_array.append('\n')
                     elif current_char == 'r':
-                        current_obj.append('\r')
+                        string_array.append('\r')
                     elif current_char == 't':
-                        current_obj.append('\t')
+                        string_array.append('\t')
                     elif current_char == 'u':
-                        current_obj = []
-                        stack.append(current_obj)
+                        hex_array = []
                         state = TemplateStates.STRING_HEX
                     else:
-                        raise ValueError('expecting valid escape character')
+                        raise ValueError(err_msg('expecting valid escape character', i, current_char))
 
                 # -----------------
                 # State: STRING_HEX
                 # -----------------
                 elif state is TemplateStates.STRING_HEX:
                     if hex_re.search(current_char):
-                        current_obj.append(current_char)
-                        if len(current_obj) >= 4:
-                            v = stack.pop()
-                            current_obj = stack[-1]
-                            current_obj.append(bytearray.fromhex(''.join(v)).decode())
+                        hex_array.append(current_char)
+                        if len(hex_array) >= 4:
+                            string_array.append(bytearray.fromhex(''.join(v)).decode())
                             state = TemplateStates.STRING_NEXT_OR_CLOSE
                         else:
-                            current_obj.append(current_char)
+                            hex_array.append(current_char)
                     else:
-                        raise ValueError('Expected a hex character ([0-9A-Fa-f]), got {}'.format(current_char))
+                        raise ValueError(err_msg('Expected a hex character ([0-9A-Fa-f])', i, current_char))
 
                 # ----------------------------
                 # State: EXPECT_QUOTE_OR_CLOSE
@@ -266,25 +260,20 @@ class Template:
                     if current_char.isspace():
                         pass
                     elif current_char == '"':
-                        current_obj = []
-                        stack.append(current_obj)
+                        string_array = []
                         state = TemplateStates.STRING_NEXT_OR_CLOSE
                     elif current_char == '}':
-                        v = stack.pop()
-                        if stack:
-                            current_obj = stack[-1]
-                            if isinstance(current_obj, str):
-                                k = stack.pop()
-                                current_obj = stack[-1]
-                                current_obj.append((k, v))
+                        parent_stack.pop()
+                        record_states.append(RecordStates.EXPECT_OBJECT_END)
+                        if parent_stack:
+                            if parent_stack[-1] is ParentStates.OBJECT:
                                 state = TemplateStates.OBJECT_NEXT_OR_CLOSE
-                            elif isinstance(current_obj, JSVArrayTemplate):
-                                current_obj.append(v)
+                            else:
                                 state = TemplateStates.ARRAY_NEXT_OR_CLOSE
                         else:
                             state = TemplateStates.DONE
                     else:
-                        raise ValueError('Expecting `"` or `}`')
+                        raise ValueError(err_msg('Expecting `"` or `}`', i, current_char))
 
                 # -------------------
                 # State: EXPECT_QUOTE
@@ -293,51 +282,12 @@ class Template:
                     if current_char.isspace():
                         pass
                     elif current_char == '"':
-                        current_obj = []
-                        stack.append(current_obj)
+                        string_array = []
                         state = TemplateStates.STRING_NEXT_OR_CLOSE
                     else:
                         raise ValueError('Expecting `"`')
-        elif isinstance(s, JSVArrayTemplate) or isinstance(JSVObjectTemplate):
-            self._root = s
         else:
-            raise TypeError('Expecting a string, a `JSVArrayTemplate` object, or a `JSVObjectTemplate` object')
+            raise TypeError('Expecting a string')
 
-        self._root = current_obj
         self._remainder = ''.join(reversed(char_list))
-        rs = []
-
-        if isinstance(self._root, JSVObjectTemplate):
-            self.linearize_object(self._root, rs)
-        elif isinstance(self._root, JSVArrayTemplate):
-            self.linearize_array(self._root, rs)
-        elif self._root is None:
-            rs = [RecordStates.EXPECT_LITERAL]
-
-        self._record_states = tuple(rs)
-
-    @staticmethod
-    def linearize_object(t, a):
-        for v in t:
-            if isinstance(v, str):
-                a.append((RecordStates.EXPECT_LITERAL, v))
-            elif isinstance(v[1], JSVObjectTemplate):
-                a.append((RecordStates.EXPECT_OBJECT_START, v[0]))
-                Template.linearize_object(v[1], a)
-            elif isinstance(v[1], JSVArrayTemplate):
-                a.append((RecordStates.EXPECT_ARRAY_START, v[0]))
-                Template.linearize_array(v[1], a)
-        a.append(RecordStates.EXPECT_OBJECT_END)
-
-    @staticmethod
-    def linearize_array(t, a):
-        for v in t:
-            if v is None:
-                a.append(RecordStates.EXPECT_LITERAL)
-            elif isinstance(v, JSVObjectTemplate):
-                a.append(RecordStates.EXPECT_OBJECT_START)
-                Template.linearize_object(v, a)
-            elif isinstance(v, JSVArrayTemplate):
-                a.append(RecordStates.EXPECT_ARRAY_START)
-                Template.linearize_array(v, a)
-        a.append(RecordStates.EXPECT_ARRAY_END)
+        self._record_states = tuple(record_states)
