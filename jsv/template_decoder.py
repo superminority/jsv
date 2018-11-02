@@ -27,6 +27,7 @@ class RecordStates(Enum):
     EXPECT_OBJECT_END = auto()
     EXPECT_ARRAY_START = auto()
     EXPECT_ARRAY_END = auto()
+    DONE = auto()
 
 
 @unique
@@ -52,8 +53,13 @@ class Template:
     def parse_record(self, s):
         current_char = None
         char_list = list(reversed(s))
-        state = self._record_states[0]
+        rs = self._record_states
+        rs_length = len(rs)
+        state = rs[0]
+        stack = []
         i = 0
+        j = 0
+
 
         while True:
             try:
@@ -62,12 +68,60 @@ class Template:
                 raise IndexError(err_msg('End of string reached unexpectedly', i, current_char))
             i += 1
 
-        if state is RecordStates.EXPECT_LITERAL:
-            pass
-            # Get literal object
+            if isinstance(state, str):
+                stack.append(state)
+                j += 1
+                state = rs[j]
 
-        elif state is RecordStates.EXPECT_ARRAY_START:
-            pass
+            elif state is RecordStates.EXPECT_LITERAL:
+                pass
+                # Get literal object
+
+            elif state is RecordStates.EXPECT_ARRAY_START:
+                if current_char.isspace():
+                    pass
+                elif current_char == '[':
+                    stack.append([])
+                    j += 1
+                    state = rs[j]
+                else:
+                    raise ValueError('Expecting [')
+
+            elif state is RecordStates.EXPECT_OBJECT_START:
+                if current_char.isspace():
+                    pass
+                elif current_char == '{':
+                    stack.append({})
+                    j += 1
+                    state = rs[j]
+                else:
+                    raise ValueError('Expecting {')
+
+            elif state is RecordStates.EXPECT_ARRAY_END:
+                if current_char.isspace():
+                    pass
+                elif current_char == ']':
+                    tmp = stack.pop()
+                    if stack:
+                        if isinstance(stack[-1], list):
+                            stack[-1].append(tmp)
+                        else:
+                            key = stack.pop()
+                            stack[-1][key] = tmp
+                    else:
+                        state = RecordStates.DONE
+
+            elif state is RecordStates.EXPECT_OBJECT_END:
+                if current_char.isspace():
+                    pass
+                elif current_char == '}':
+                    tmp = stack.pop()
+                    if stack:
+                        if isinstance(stack[-1], list):
+                            stack[-1].append(tmp)
+                        else:
+                            key = stack.pop()
+                            stack[-1][key] = tmp
 
 
     @property
@@ -89,6 +143,7 @@ class Template:
 
             while state is not TemplateStates.DONE:
                 try:
+
                     current_char = char_list.pop()
                 except IndexError:
                     raise IndexError(err_msg('End of string reached unexpectedly', i, current_char))
