@@ -2,8 +2,6 @@ from enum import Enum, auto, unique
 from re import compile
 import json
 
-from .template import JSVArrayTemplate, JSVObjectTemplate
-
 
 @unique
 class TemplateStates(Enum):
@@ -22,11 +20,11 @@ class TemplateStates(Enum):
 
 @unique
 class RecordStates(Enum):
-    EXPECT_LITERAL = auto()
     EXPECT_OBJECT_START = auto()
     EXPECT_OBJECT_END = auto()
     EXPECT_ARRAY_START = auto()
     EXPECT_ARRAY_END = auto()
+    EXPECT_QUOTE = auto()
     DONE = auto()
 
 
@@ -39,10 +37,11 @@ class ParentStates(Enum):
 hex_re = compile('[0-9a-fA-F]')
 
 
-def json_remainder(s):
+def json_remainder(s_array):
+    s = ''.join(reversed(s_array))
     d = json.JSONDecoder()
     v, r = d.raw_decode(s)
-    return v, s[r:].lstrip()
+    return v, list(reversed(s[r:].lstrip()))
 
 
 def err_msg(msg, i, c):
@@ -60,22 +59,26 @@ class Template:
         i = 0
         j = 0
 
-
-        while True:
+        while state is not RecordStates.DONE:
             try:
                 current_char = char_list.pop()
             except IndexError:
                 raise IndexError(err_msg('End of string reached unexpectedly', i, current_char))
             i += 1
+            print(stack)
+            print(state)
+            print(''.join(reversed(char_list)))
+            print('----------')
 
             if isinstance(state, str):
-                stack.append(state)
-                j += 1
-                state = rs[j]
-
-            elif state is RecordStates.EXPECT_LITERAL:
-                pass
-                # Get literal object
+                if current_char.isspace():
+                    pass
+                elif current_char == ',':
+                    stack.append(state)
+                    tmp, char_list = json_remainder(char_list)
+                    stack.append(tmp)
+                    j += 1
+                    state = rs[j]
 
             elif state is RecordStates.EXPECT_ARRAY_START:
                 if current_char.isspace():
@@ -94,6 +97,13 @@ class Template:
                     stack.append({})
                     j += 1
                     state = rs[j]
+                    if isinstance(state, str):
+                        stack.append(state)
+                        tmp, char_list = json_remainder(char_list)
+                        stack.append(tmp)
+                        j += 1
+                        state = rs[j]
+
                 else:
                     raise ValueError('Expecting {')
 
@@ -116,13 +126,29 @@ class Template:
                     pass
                 elif current_char == '}':
                     tmp = stack.pop()
-                    if stack:
+                    key = stack.pop()
+                    stack[-1][key] = tmp
+                    j += 1
+                    if j >= rs_length:
+                        out = stack[-1]
+                        state = RecordStates.DONE
+                    else:
+                        tmp = stack.pop()
                         if isinstance(stack[-1], list):
                             stack[-1].append(tmp)
                         else:
                             key = stack.pop()
                             stack[-1][key] = tmp
+                        state = rs[j]
+                elif current_char == ',':
+                    tmp = stack.pop()
+                    key = stack.pop()
+                    stack[-1][key] = tmp
+                    tmp, char_list = json_remainder(char_list)
+                    stack.append(tmp)
+                    state = RecordStates.EXPECT_QUOTE
 
+        return out
 
     @property
     def remainder(self):
@@ -301,7 +327,7 @@ class Template:
                     if hex_re.search(current_char):
                         hex_array.append(current_char)
                         if len(hex_array) >= 4:
-                            string_array.append(bytearray.fromhex(''.join(v)).decode())
+                            string_array.append(bytearray.fromhex(''.join(hex_array)).decode())
                             state = TemplateStates.STRING_NEXT_OR_CLOSE
                         else:
                             hex_array.append(current_char)
