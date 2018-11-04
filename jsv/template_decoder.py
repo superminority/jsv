@@ -112,14 +112,24 @@ class Template:
                     pass
                 elif current_char == ']':
                     tmp = stack.pop()
-                    if stack:
+                    stack[-1].append(tmp)
+                    j += 1
+                    if j >= rs_length:
+                        out = stack.pop()
+                        state = RecordStates.DONE
+                    else:
+                        tmp = stack.pop()
                         if isinstance(stack[-1], list):
                             stack[-1].append(tmp)
                         else:
                             key = stack.pop()
                             stack[-1][key] = tmp
-                    else:
-                        state = RecordStates.DONE
+                        state = rs[j]
+                elif current_char == ',':
+                    tmp = stack.pop()
+                    stack[-1].append(tmp)
+
+
 
             elif state is RecordStates.EXPECT_OBJECT_END:
                 if current_char.isspace():
@@ -130,7 +140,7 @@ class Template:
                     stack[-1][key] = tmp
                     j += 1
                     if j >= rs_length:
-                        out = stack[-1]
+                        out = stack.pop()
                         state = RecordStates.DONE
                     else:
                         tmp = stack.pop()
