@@ -14,17 +14,27 @@ class TemplateStates(Enum):
     STRING_NEXT_OR_CLOSE = auto()
     STRING_ESCAPE = auto()
     STRING_HEX = auto()
-    EXPECT_QUOTE_OR_CLOSE = auto()
+    EXPECT_QUOTE_OR_OBJECT_CLOSE = auto()
     EXPECT_QUOTE = auto()
+
+
+@unique
+class RecordExpectedStates(Enum):
+    EXPECT_OBJECT_START = auto()
+    EXPECT_OBJECT_END = auto()
+    EXPECT_ARRAY_START = auto()
+    EXPECT_ARRAY_END = auto()
 
 
 @unique
 class RecordStates(Enum):
     EXPECT_OBJECT_START = auto()
-    EXPECT_OBJECT_END = auto()
+    EXPECT_NEXT_OBJECT = auto()
+    EXPECT_NEXT_OR_OBJECT_END = auto()
     EXPECT_ARRAY_START = auto()
-    EXPECT_ARRAY_END = auto()
-    EXPECT_QUOTE = auto()
+    EXPECT_NEXT_ARRAY = auto()
+    EXPECT_NEXT_OR_ARRAY_END = auto()
+    EXPECT_VALUE = auto()
     DONE = auto()
 
 
@@ -38,7 +48,9 @@ hex_re = compile('[0-9a-fA-F]')
 
 
 def json_remainder(s_array):
-    s = ''.join(reversed(s_array))
+    print(s_array)
+    s = ''.join(reversed(s_array)).lstrip()
+    print(s)
     d = json.JSONDecoder()
     v, r = d.raw_decode(s)
     return v, list(reversed(s[r:].lstrip()))
@@ -54,10 +66,16 @@ class Template:
         char_list = list(reversed(s))
         rs = self._record_states
         rs_length = len(rs)
-        state = rs[0]
-        stack = []
         i = 0
         j = 0
+        if rs[j] is RecordExpectedStates.EXPECT_OBJECT_START:
+            state = RecordStates.EXPECT_OBJECT_START
+        elif rs[j] is RecordExpectedStates.EXPECT_ARRAY_START:
+            state = RecordStates.EXPECT_ARRAY_START
+        else:
+            state = RecordStates.EXPECT_VALUE
+        stack = []
+        array_def_stack = []
 
         while state is not RecordStates.DONE:
             try:
@@ -70,15 +88,38 @@ class Template:
             print(''.join(reversed(char_list)))
             print('----------')
 
-            if isinstance(state, str):
+            if state is RecordStates.EXPECT_OBJECT_START:
+                if current_char.isspace():
+                    pass
+                elif current_char == '{':
+                    stack.append({})
+                    j += 1
+                    if isinstance(rs[j], str):
+                        stack.append(rs[j])
+                        j += 1
+                        if isinstance(rs[j], str):
+                            state = RecordStates.EXPECT_VALUE
+                        elif rs[j] is RecordExpectedStates.EXPECT_ARRAY_START:
+                            state = RecordStates.EXPECT_ARRAY_START
+                    elif rs[j] is RecordExpectedStates.EXPECT_OBJECT_END:
+                        state = RecordStates.EXPECT_KEY_OR_OBJECT_END
+                else:
+                    raise ValueError('Expecting {')
+
+            elif state is RecordStates.EXPECT_NEXT_OBJECT:
                 if current_char.isspace():
                     pass
                 elif current_char == ',':
-                    stack.append(state)
-                    tmp, char_list = json_remainder(char_list)
-                    stack.append(tmp)
+                    stack.append(rs[j])
                     j += 1
-                    state = rs[j]
+                    if isinstance(rs[j], str) or rs[j] is RecordExpectedStates.EXPECT_OBJECT_END:
+                        state = RecordStates.EXPECT_VALUE
+                    elif rs[j] is RecordExpectedStates.EXPECT_OBJECT_START:
+                        state = RecordStates.EXPECT_OBJECT_START
+                    elif rs[j] is RecordExpectedStates.EXPECT_ARRAY_START:
+                        state = RecordStates.EXPECT_ARRAY_START
+                else:
+                    raise ValueError('Expecting ,')
 
             elif state is RecordStates.EXPECT_ARRAY_START:
                 if current_char.isspace():
@@ -86,31 +127,20 @@ class Template:
                 elif current_char == '[':
                     stack.append([])
                     j += 1
-                    state = rs[j]
+                    if rs[j] is RecordExpectedStates.EXPECT_ARRAY_END:
+                        array_def_stack.append(None)
+                        state = RecordStates.EXPECT_VALUE
+                    elif rs[j] is RecordExpectedStates.EXPECT_OBJECT_START:
+                        array_def_stack.append(j)
+                        state = RecordStates.EXPECT_OBJECT_START
                 else:
                     raise ValueError('Expecting [')
-
-            elif state is RecordStates.EXPECT_OBJECT_START:
-                if current_char.isspace():
-                    pass
-                elif current_char == '{':
-                    stack.append({})
-                    j += 1
-                    state = rs[j]
-                    if isinstance(state, str):
-                        stack.append(state)
-                        tmp, char_list = json_remainder(char_list)
-                        stack.append(tmp)
-                        j += 1
-                        state = rs[j]
-
-                else:
-                    raise ValueError('Expecting {')
 
             elif state is RecordStates.EXPECT_ARRAY_END:
                 if current_char.isspace():
                     pass
                 elif current_char == ']':
+                    array_def_stack.pop()
                     tmp = stack.pop()
                     if stack:
                         if isinstance(stack[-1], list):
@@ -119,7 +149,15 @@ class Template:
                             key = stack.pop()
                             stack[-1][key] = tmp
                     else:
-                        state = RecordStates.DONE
+                        state = RecordExpectedStates.DONE
+                elif current_char == ',':
+                    j = array_def_stack[-1]
+                    if j is None:
+                        state = RecordStates.EXPECT_VALUE
+                    elif rs[j] is RecordExpectedStates.EXPECT_ARRAY_START:
+                        RecordStates.EXPECT_ARRAY_START
+                    elif rs[j] is RecordExpectedStates.EXPECT_OBJECT_START:
+                        RecordStates.EXPECT_OBJECT_START
 
             elif state is RecordStates.EXPECT_OBJECT_END:
                 if current_char.isspace():
@@ -144,8 +182,6 @@ class Template:
                     tmp = stack.pop()
                     key = stack.pop()
                     stack[-1][key] = tmp
-                    tmp, char_list = json_remainder(char_list)
-                    stack.append(tmp)
                     state = RecordStates.EXPECT_QUOTE
 
         return out
@@ -168,6 +204,7 @@ class Template:
             current_char = None
 
             while state is not TemplateStates.DONE:
+                print(state)
                 try:
 
                     current_char = char_list.pop()
@@ -183,14 +220,14 @@ class Template:
                         pass
                     elif current_char == '{':
                         parent_stack.append(ParentStates.OBJECT)
-                        record_states.append(RecordStates.EXPECT_OBJECT_START)
-                        state = TemplateStates.EXPECT_QUOTE_OR_CLOSE
+                        record_states.append(RecordExpectedStates.EXPECT_OBJECT_START)
+                        state = TemplateStates.EXPECT_QUOTE_OR_OBJECT_CLOSE
                     elif current_char == '[':
                         parent_stack.append(ParentStates.ARRAY)
-                        record_states.append(RecordStates.EXPECT_ARRAY_START)
+                        record_states.append(RecordExpectedStates.EXPECT_ARRAY_START)
                     elif current_char == ']':
                         parent_stack.pop()
-                        record_states.append(RecordStates.EXPECT_ARRAY_END)
+                        record_states.append(RecordExpectedStates.EXPECT_ARRAY_END)
                         if parent_stack:
                             if parent_stack[-1] is ParentStates.OBJECT:
                                 state = TemplateStates.OBJECT_NEXT_OR_CLOSE
@@ -209,11 +246,11 @@ class Template:
                         pass
                     elif current_char == '{':
                         parent_stack.append(ParentStates.OBJECT)
-                        record_states.append(RecordStates.EXPECT_OBJECT_START)
-                        state = TemplateStates.EXPECT_QUOTE_OR_CLOSE
+                        record_states.append(RecordExpectedStates.EXPECT_OBJECT_START)
+                        state = TemplateStates.EXPECT_QUOTE_OR_OBJECT_CLOSE
                     elif current_char == '[':
                         parent_stack.append(ParentStates.ARRAY)
-                        record_states.append(RecordStates.EXPECT_ARRAY_START)
+                        record_states.append(RecordExpectedStates.EXPECT_ARRAY_START)
                         state = TemplateStates.EXPECT_ARRAY_OR_OBJECT_OR_ARRAY_CLOSE
                     else:
                         raise ValueError(err_msg('Expecting `{` or `[`', i, current_char))
@@ -228,7 +265,7 @@ class Template:
                         state = TemplateStates.EXPECT_ARRAY_OR_OBJECT
                     elif current_char == ']':
                         parent_stack.pop()
-                        record_states.append(RecordStates.EXPECT_ARRAY_END)
+                        record_states.append(RecordExpectedStates.EXPECT_ARRAY_END)
                         if parent_stack:
                             if parent_stack[-1] is ParentStates.OBJECT:
                                 state = TemplateStates.OBJECT_NEXT_OR_CLOSE
@@ -251,7 +288,7 @@ class Template:
                         state = TemplateStates.EXPECT_ARRAY_OR_OBJECT
                     elif current_char == '}':
                         parent_stack.pop()
-                        record_states.append(RecordStates.EXPECT_OBJECT_END)
+                        record_states.append(RecordExpectedStates.EXPECT_OBJECT_END)
                         if parent_stack:
                             if parent_stack[-1] is ParentStates.OBJECT:
                                 state = TemplateStates.OBJECT_NEXT_OR_CLOSE
@@ -272,7 +309,7 @@ class Template:
                         state = TemplateStates.EXPECT_QUOTE
                     elif current_char == '}':
                         parent_stack.pop()
-                        record_states.append(RecordStates.EXPECT_OBJECT_END)
+                        record_states.append(RecordExpectedStates.EXPECT_OBJECT_END)
                         if parent_stack:
                             if parent_stack[-1] is ParentStates.ARRAY:
                                 state = TemplateStates.ARRAY_NEXT_OR_CLOSE
@@ -337,7 +374,7 @@ class Template:
                 # ----------------------------
                 # State: EXPECT_QUOTE_OR_CLOSE
                 # ----------------------------
-                elif state is TemplateStates.EXPECT_QUOTE_OR_CLOSE:
+                elif state is TemplateStates.EXPECT_QUOTE_OR_OBJECT_CLOSE:
                     if current_char.isspace():
                         pass
                     elif current_char == '"':
@@ -345,7 +382,7 @@ class Template:
                         state = TemplateStates.STRING_NEXT_OR_CLOSE
                     elif current_char == '}':
                         parent_stack.pop()
-                        record_states.append(RecordStates.EXPECT_OBJECT_END)
+                        record_states.append(RecordExpectedStates.EXPECT_OBJECT_END)
                         if parent_stack:
                             if parent_stack[-1] is ParentStates.OBJECT:
                                 state = TemplateStates.OBJECT_NEXT_OR_CLOSE
