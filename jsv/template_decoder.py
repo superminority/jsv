@@ -142,14 +142,18 @@ class Template:
                 elif current_char == ']':
                     array_def_stack.pop()
                     tmp = stack.pop()
-                    if stack:
+                    stack[-1].append(tmp)
+                    j += 1
+                    if j >= rs_length:
+                        out = stack.pop()
+                        state = RecordStates.DONE
+                    else:
+                        tmp = stack.pop()
                         if isinstance(stack[-1], list):
                             stack[-1].append(tmp)
                         else:
                             key = stack.pop()
                             stack[-1][key] = tmp
-                    else:
-                        state = RecordExpectedStates.DONE
                 elif current_char == ',':
                     j = array_def_stack[-1]
                     if j is None:
@@ -168,7 +172,7 @@ class Template:
                     stack[-1][key] = tmp
                     j += 1
                     if j >= rs_length:
-                        out = stack[-1]
+                        out = stack.pop()
                         state = RecordStates.DONE
                     else:
                         tmp = stack.pop()
