@@ -250,7 +250,6 @@ class Template:
                             array_stack[-1].append(len(record_states))
                         record_states.append(RecordExpectedStates.EXPECT_VALUE_ARRAY_PARENT)
                     elif current_char == ']':
-                        print(len(record_states))
                         array_stack[-1].append(len(record_states))
                         array_stack[-1].append(len(record_states)+1)
                         array_list.append(array_stack.pop())
@@ -459,5 +458,6 @@ class Template:
 
         self._remainder = ''.join(reversed(char_list))
 
-        print(array_list)
+        for array in array_list:
+            record_states[array[-1]] = (record_states[array[-1]], array[-2])
         self._record_states = tuple(record_states)
