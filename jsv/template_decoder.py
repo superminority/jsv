@@ -215,7 +215,6 @@ class Template:
             char_list = list(reversed(s))
             parent_stack = []
             record_states = []
-            last_array_entry = []
             i = -1
             current_char = None
 
@@ -233,23 +232,14 @@ class Template:
                     if current_char.isspace():
                         pass
                     elif current_char == '{':
-                        if parent_stack:
-                            if parent_stack[-1] is ParentStates.ARRAY:
-                                last_array_entry[-1] = len(record_states) - 1
                         parent_stack.append(ParentStates.OBJECT)
                         record_states.append(RecordExpectedStates.EXPECT_OBJECT_START)
                         state = TemplateStates.EXPECT_QUOTE_OR_OBJECT_CLOSE
                     elif current_char == '[':
-                        if parent_stack:
-                            if parent_stack[-1] is ParentStates.ARRAY:
-                                last_array_entry[-1] = len(record_states) - 1
                         record_states.append(RecordExpectedStates.EXPECT_ARRAY_START)
-                        last_array_entry.append(-1)
                         parent_stack.append(ParentStates.ARRAY)
-                        last_array_entry.append(len(record_states))
                     elif current_char == ',':
                         record_states.append(RecordExpectedStates.EXPECT_VALUE_ARRAY_PARENT)
-                        last_array_entry[-1] = len(record_states) - 1
                     elif current_char == ']':
                         parent_stack.pop()
                         record_states.append(RecordExpectedStates.EXPECT_VALUE_ARRAY_PARENT)
@@ -263,7 +253,6 @@ class Template:
                         else:
                             record_states.append(RecordExpectedStates.EXPECT_ARRAY_END_DONE)
                             state = TemplateStates.DONE
-                        record_states.append(last_array_entry.pop())
                     else:
                         raise ValueError(err_msg('Expecting `{`, `[` or `]`', i, current_char))
 
@@ -274,20 +263,13 @@ class Template:
                     if current_char.isspace():
                         pass
                     elif current_char == '{':
-                        if parent_stack:
-                            if parent_stack[-1] is ParentStates.ARRAY:
-                                last_array_entry[-1] = len(record_states) - 1
                         parent_stack.append(ParentStates.OBJECT)
                         record_states.append(RecordExpectedStates.EXPECT_OBJECT_START)
                         state = TemplateStates.EXPECT_QUOTE_OR_OBJECT_CLOSE
                     elif current_char == '[':
-                        if parent_stack:
-                            if parent_stack[-1] is ParentStates.ARRAY:
-                                last_array_entry[-1] = len(record_states) - 1
                         parent_stack.append(ParentStates.ARRAY)
                         record_states.append(RecordExpectedStates.EXPECT_ARRAY_START)
                         state = TemplateStates.EXPECT_ARRAY_OR_OBJECT_OR_ARRAY_CLOSE
-                        last_array_entry.append(len(record_states))
                     else:
                         raise ValueError(err_msg('Expecting `{` or `[`', i, current_char))
 
@@ -311,7 +293,6 @@ class Template:
                         else:
                             record_states.append(RecordExpectedStates.EXPECT_ARRAY_END_DONE)
                             state = TemplateStates.DONE
-                        record_states.append(last_array_entry.pop())
                     else:
                         raise ValueError(err_msg('Expecting `,` or `]`', i, current_char))
 
@@ -456,4 +437,9 @@ class Template:
             raise TypeError('Expecting a string')
 
         self._remainder = ''.join(reversed(char_list))
+
+        array_stack = []
+        for rs in record_states:
+            if rs is RecordExpectedStates.EXPECT_ARRAY_START:
+                array_stack.append([])
         self._record_states = tuple(record_states)
