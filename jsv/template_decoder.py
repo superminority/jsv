@@ -22,8 +22,16 @@ class TemplateStates(Enum):
 class RecordExpectedStates(Enum):
     EXPECT_OBJECT_START = auto()
     EXPECT_OBJECT_END = auto()
+    EXPECT_OBJECT_END_OBJECT_PARENT = auto()
+    EXPECT_OBJECT_END_ARRAY_PARENT = auto()
+    EXPECT_OBJECT_END_DONE = auto()
     EXPECT_ARRAY_START = auto()
     EXPECT_ARRAY_END = auto()
+    EXPECT_ARRAY_END_OBJECT_PARENT = auto()
+    EXPECT_ARRAY_END_ARRAY_PARENT = auto()
+    EXPECT_ARRAY_END_DONE = auto()
+    EXPECT_VALUE = auto()
+    LAST_ARRAY_ENTRY = auto()
 
 
 @unique
@@ -210,7 +218,6 @@ class Template:
             while state is not TemplateStates.DONE:
                 print(state)
                 try:
-
                     current_char = char_list.pop()
                 except IndexError:
                     raise IndexError(err_msg('End of string reached unexpectedly', i, current_char))
@@ -231,13 +238,16 @@ class Template:
                         record_states.append(RecordExpectedStates.EXPECT_ARRAY_START)
                     elif current_char == ']':
                         parent_stack.pop()
-                        record_states.append(RecordExpectedStates.EXPECT_ARRAY_END)
+                        record_states.append(RecordExpectedStates.EXPECT_VALUE)
                         if parent_stack:
                             if parent_stack[-1] is ParentStates.OBJECT:
+                                record_states.append(RecordExpectedStates.EXPECT_ARRAY_END_OBJECT_PARENT)
                                 state = TemplateStates.OBJECT_NEXT_OR_CLOSE
                             else:
+                                record_states.append(RecordExpectedStates.EXPECT_ARRAY_END_ARRAY_PARENT)
                                 state = TemplateStates.ARRAY_NEXT_OR_CLOSE
                         else:
+                            record_states.append(RecordExpectedStates.EXPECT_ARRAY_END_DONE)
                             state = TemplateStates.DONE
                     else:
                         raise ValueError(err_msg('Expecting `{`, `[` or `]`', i, current_char))
@@ -272,10 +282,13 @@ class Template:
                         record_states.append(RecordExpectedStates.EXPECT_ARRAY_END)
                         if parent_stack:
                             if parent_stack[-1] is ParentStates.OBJECT:
+                                record_states.append(RecordExpectedStates.EXPECT_ARRAY_END_OBJECT_PARENT)
                                 state = TemplateStates.OBJECT_NEXT_OR_CLOSE
                             else:
+                                record_states.append(RecordExpectedStates.EXPECT_ARRAY_END_ARRAY_PARENT)
                                 state = TemplateStates.ARRAY_NEXT_OR_CLOSE
                         else:
+                            record_states.append(RecordExpectedStates.EXPECT_ARRAY_END_DONE)
                             state = TemplateStates.DONE
                     else:
                         raise ValueError(err_msg('Expecting `,` or `]`', i, current_char))
@@ -287,18 +300,22 @@ class Template:
                     if current_char.isspace():
                         pass
                     elif current_char == ',':
+                        record_states.append(RecordExpectedStates.EXPECT_VALUE)
                         state = TemplateStates.EXPECT_QUOTE
                     elif current_char == ':':
                         state = TemplateStates.EXPECT_ARRAY_OR_OBJECT
                     elif current_char == '}':
                         parent_stack.pop()
-                        record_states.append(RecordExpectedStates.EXPECT_OBJECT_END)
+                        record_states.append(RecordExpectedStates.EXPECT_VALUE)
                         if parent_stack:
                             if parent_stack[-1] is ParentStates.OBJECT:
+                                record_states.append(RecordExpectedStates.EXPECT_OBJECT_END_OBJECT_PARENT)
                                 state = TemplateStates.OBJECT_NEXT_OR_CLOSE
                             else:
+                                record_states.append(RecordExpectedStates.EXPECT_OBJECT_END_ARRAY_PARENT)
                                 state = TemplateStates.ARRAY_NEXT_OR_CLOSE
                         else:
+                            record_states.append(RecordExpectedStates.EXPECT_OBJECT_END_DONE)
                             state = TemplateStates.DONE
                     else:
                         raise ValueError(err_msg('Expecting `,`, `:`, or `}`', i, current_char))
