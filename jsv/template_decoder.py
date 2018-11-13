@@ -213,6 +213,8 @@ class Template:
         if isinstance(s, str):
             state = TemplateStates.EXPECT_ARRAY_OR_OBJECT
             char_list = list(reversed(s))
+            array_stack = []
+            array_list = []
             parent_stack = []
             record_states = []
             i = -1
@@ -232,15 +234,26 @@ class Template:
                     if current_char.isspace():
                         pass
                     elif current_char == '{':
+                        if parent_stack and parent_stack[-1] is ParentStates.ARRAY:
+                            array_stack[-1].append(len(record_states))
                         parent_stack.append(ParentStates.OBJECT)
                         record_states.append(RecordExpectedStates.EXPECT_OBJECT_START)
                         state = TemplateStates.EXPECT_QUOTE_OR_OBJECT_CLOSE
                     elif current_char == '[':
+                        if parent_stack and parent_stack[-1] is ParentStates.ARRAY:
+                            array_stack[-1].append(len(record_states))
+                        array_stack.append([len(record_states)])
                         record_states.append(RecordExpectedStates.EXPECT_ARRAY_START)
                         parent_stack.append(ParentStates.ARRAY)
                     elif current_char == ',':
+                        if parent_stack and parent_stack[-1] is ParentStates.ARRAY:
+                            array_stack[-1].append(len(record_states))
                         record_states.append(RecordExpectedStates.EXPECT_VALUE_ARRAY_PARENT)
                     elif current_char == ']':
+                        print(len(record_states))
+                        array_stack[-1].append(len(record_states))
+                        array_stack[-1].append(len(record_states)+1)
+                        array_list.append(array_stack.pop())
                         parent_stack.pop()
                         record_states.append(RecordExpectedStates.EXPECT_VALUE_ARRAY_PARENT)
                         if parent_stack:
@@ -263,10 +276,15 @@ class Template:
                     if current_char.isspace():
                         pass
                     elif current_char == '{':
+                        if parent_stack and parent_stack[-1] is ParentStates.ARRAY:
+                            array_stack[-1].append(len(record_states))
                         parent_stack.append(ParentStates.OBJECT)
                         record_states.append(RecordExpectedStates.EXPECT_OBJECT_START)
                         state = TemplateStates.EXPECT_QUOTE_OR_OBJECT_CLOSE
                     elif current_char == '[':
+                        if parent_stack and parent_stack[-1] is ParentStates.ARRAY:
+                            array_stack[-1].append(len(record_states))
+                        array_stack.append([len(record_states)])
                         parent_stack.append(ParentStates.ARRAY)
                         record_states.append(RecordExpectedStates.EXPECT_ARRAY_START)
                         state = TemplateStates.EXPECT_ARRAY_OR_OBJECT_OR_ARRAY_CLOSE
@@ -282,6 +300,9 @@ class Template:
                     elif current_char == ',':
                         state = TemplateStates.EXPECT_ARRAY_OR_OBJECT_OR_ARRAY_CLOSE
                     elif current_char == ']':
+                        print(len(record_states))
+                        array_stack[-1].append(len(record_states))
+                        array_list.append(array_stack.pop())
                         parent_stack.pop()
                         if parent_stack:
                             if parent_stack[-1] is ParentStates.OBJECT:
@@ -438,8 +459,5 @@ class Template:
 
         self._remainder = ''.join(reversed(char_list))
 
-        array_stack = []
-        for rs in record_states:
-            if rs is RecordExpectedStates.EXPECT_ARRAY_START:
-                array_stack.append([])
+        print(array_list)
         self._record_states = tuple(record_states)
