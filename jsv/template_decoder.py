@@ -180,26 +180,32 @@ class Template:
         j = 0
         i = -1
         rs = self._record_states
+        pop_next = True
+        current_char = None
 
         while True:
-            try:
-                i += 1
-                current_char = char_list.pop()
-            except IndexError:
-                raise IndexError(err_msg('End of string reached unexpectedly', i, current_char))
+            if pop_next:
+                try:
+                    i += 1
+                    current_char = char_list.pop()
+                except IndexError:
+                    raise IndexError(err_msg('End of string reached unexpectedly', i, current_char))
+            print(rs[j][0])
+            print(current_char)
 
             if rs[j][0] is RecordExpectedStates.EXPECT_ARRAY_START:
                 if current_char.isspace():
-                    pass
+                    pop_next = True
                 elif current_char == '[':
                     stack.append([])
                     j += 1
+                    pop_next = True
                 else:
                     raise ValueError('error')
 
             elif rs[j][0] is RecordExpectedStates.EXPECT_ARRAY_END:
                 if current_char.isspace():
-                    pass
+                    pop_next = True
                 elif current_char == ']':
                     tmp = stack.pop()
                     if rs[j][1] is ParentStates.ARRAY:
@@ -210,21 +216,24 @@ class Template:
                     else:
                         return tmp
                     j += 1
+                    pop_next = True
                 elif current_char == ',':
                     j = rs[j][2]
+                    pop_next = True
 
             elif rs[j][0] is RecordExpectedStates.EXPECT_OBJECT_START:
                 if current_char.isspace():
-                    pass
+                    pop_next = True
                 elif current_char == '{':
                     stack.append({})
                     j += 1
+                    pop_next = True
                 else:
                     raise ValueError('error')
 
             elif rs[j][0] is RecordExpectedStates.EXPECT_OBJECT_END:
                 if current_char.isspace():
-                    pass
+                    pop_next = True
                 elif current_char == '}':
                     tmp = stack.pop()
                     if rs[j][1] is ParentStates.ARRAY:
@@ -235,15 +244,22 @@ class Template:
                     else:
                         return tmp
                     j += 1
+                    pop_next = True
                 elif current_char == ',':
                     k, v = get_key_value_pair(char_list)
                     stack[-1][k] = v
+                    pop_next = True
+                else:
+                    raise ValueError('error')
 
             elif rs[j][0] is RecordExpectedStates.OBJECT_KEY:
                 stack.append(rs[j][1])
                 j += 1
+                pop_next = False
 
             elif rs[j][0] is RecordExpectedStates.EXPECT_VALUE:
+                if current_char:
+                    char_list.append(current_char)
                 tmp = get_json_value(char_list)
                 if rs[j][1] is ParentStates.ARRAY:
                     stack[-1].append(tmp)
@@ -253,6 +269,7 @@ class Template:
                 else:
                     return tmp
                 j += 1
+                pop_next = True
 
     @property
     def remainder(self):
@@ -434,9 +451,9 @@ class Template:
                     else:
                         raise ValueError(err_msg('Expecting `,` or `}`', i, current_char))
 
-                # ----------------------------
-                # State: EXPECT_QUOTE_OR_CLOSE
-                # ----------------------------
+                # -----------------------------------
+                # State: EXPECT_QUOTE_OR_OBJECT_CLOSE
+                # -----------------------------------
                 elif state is TemplateStates.EXPECT_QUOTE_OR_OBJECT_CLOSE:
                     if current_char.isspace():
                         pass
@@ -447,17 +464,22 @@ class Template:
                         state = TemplateStates.OBJECT_AFTER_KEY
                     elif current_char == '}':
                         parent_stack.pop()
+                        if record_states[-1][0] is RecordExpectedStates.EXPECT_OBJECT_START:
+                            record_states.pop()
+                            rs_next = RecordExpectedStates.EXPECT_VALUE
+                        else:
+                            rs_next = RecordExpectedStates.EXPECT_OBJECT_END
                         if parent_stack:
                             if parent_stack[-1] is ParentStates.OBJECT:
-                                record_states.append((RecordExpectedStates.EXPECT_OBJECT_END,
+                                record_states.append((rs_next,
                                                       ParentStates.OBJECT))
                                 state = TemplateStates.OBJECT_NEXT_OR_CLOSE
                             else:
-                                record_states.append((RecordExpectedStates.EXPECT_OBJECT_END,
+                                record_states.append((rs_next,
                                                       ParentStates.ARRAY))
                                 state = TemplateStates.ARRAY_NEXT_OR_CLOSE
                         else:
-                            record_states.append((RecordExpectedStates.EXPECT_OBJECT_END,
+                            record_states.append((rs_next,
                                                   ParentStates.NONE))
                             state = TemplateStates.DONE
                     else:
