@@ -29,6 +29,7 @@ class RecordExpectedStates(Enum):
     EXPECT_ARRAY_START = auto()
     EXPECT_ARRAY_END = auto()
     EXPECT_VALUE = auto()
+    EXPECT_COMMA = auto()
     OBJECT_KEY = auto()
 
 
@@ -320,6 +321,8 @@ class Template:
                             array_stack[-1].append(len(record_states))
                         record_states.append((RecordExpectedStates.EXPECT_VALUE,
                                               ParentStates.ARRAY))
+                        record_states.append((RecordExpectedStates.EXPECT_COMMA,
+                                              ParentStates.ARRAY))
                     elif current_char == ']':
                         array_stack[-1].append(len(record_states))
                         array_stack[-1].append(len(record_states)+1)
@@ -373,6 +376,8 @@ class Template:
                     if current_char.isspace():
                         pass
                     elif current_char == ',':
+                        record_states.append((RecordExpectedStates.EXPECT_COMMA,
+                                              ParentStates.ARRAY))
                         state = TemplateStates.EXPECT_ARRAY_OR_OBJECT_OR_ARRAY_CLOSE
                     elif current_char == ']':
                         array_stack[-1].append(len(record_states))
@@ -402,6 +407,8 @@ class Template:
                         pass
                     elif current_char == ',':
                         record_states.append((RecordExpectedStates.EXPECT_VALUE,
+                                              ParentStates.OBJECT))
+                        record_states.append((RecordExpectedStates.EXPECT_COMMA,
                                               ParentStates.OBJECT))
                         state = TemplateStates.EXPECT_QUOTE
                     elif current_char == ':':
@@ -433,6 +440,8 @@ class Template:
                     if current_char.isspace():
                         pass
                     elif current_char == ',':
+                        record_states.append((RecordExpectedStates.EXPECT_COMMA,
+                                              ParentStates.OBJECT))
                         state = TemplateStates.EXPECT_QUOTE
                     elif current_char == '}':
                         parent_stack.pop()
