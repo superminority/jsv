@@ -181,82 +181,70 @@ class Template:
         j = 0
         i = -1
         rs = self._record_states
-        pop_next = True
         current_char = None
 
         while True:
-            if pop_next:
-                try:
-                    i += 1
-                    current_char = char_list.pop()
-                except IndexError:
-                    raise IndexError(err_msg('End of string reached unexpectedly', i, current_char))
+            try:
+                i += 1
+                current_char = char_list.pop()
+            except IndexError:
+                raise IndexError(err_msg('End of string reached unexpectedly', i, current_char))
+            print(j)
             print(rs[j][0])
             print(current_char)
 
             if rs[j][0] is RecordExpectedStates.EXPECT_ARRAY_START:
                 if current_char.isspace():
-                    pop_next = True
+                    pass
                 elif current_char == '[':
                     stack.append([])
                     j += 1
-                    pop_next = True
                 else:
                     raise ValueError('error')
 
             elif rs[j][0] is RecordExpectedStates.EXPECT_ARRAY_END:
                 if current_char.isspace():
-                    pop_next = True
+                    pass
                 elif current_char == ']':
                     tmp = stack.pop()
                     if rs[j][1] is ParentStates.ARRAY:
                         stack[-1].append(tmp)
                     elif rs[j][1] is ParentStates.OBJECT:
-                        key = stack.pop()
+                        key = rs[j][2]
                         stack[-1][key] = tmp
                     else:
                         return tmp
                     j += 1
-                    pop_next = True
                 elif current_char == ',':
-                    j = rs[j][2]
-                    pop_next = True
+                    j = rs[j][3]
 
             elif rs[j][0] is RecordExpectedStates.EXPECT_OBJECT_START:
                 if current_char.isspace():
-                    pop_next = True
+                    pass
                 elif current_char == '{':
                     stack.append({})
                     j += 1
-                    pop_next = True
                 else:
                     raise ValueError('error')
 
             elif rs[j][0] is RecordExpectedStates.EXPECT_OBJECT_END:
                 if current_char.isspace():
-                    pop_next = True
+                    pass
                 elif current_char == '}':
                     tmp = stack.pop()
                     if rs[j][1] is ParentStates.ARRAY:
                         stack[-1].append(tmp)
                     elif rs[j][1] is ParentStates.OBJECT:
-                        key = stack.pop()
+                        key = rs[j][2]
                         stack[-1][key] = tmp
                     else:
                         return tmp
                     j += 1
-                    pop_next = True
                 elif current_char == ',':
                     k, v = get_key_value_pair(char_list)
                     stack[-1][k] = v
-                    pop_next = True
                 else:
                     raise ValueError('error')
-
-            elif rs[j][0] is RecordExpectedStates.OBJECT_KEY:
-                stack.append(rs[j][1])
-                j += 1
-                pop_next = False
 
             elif rs[j][0] is RecordExpectedStates.EXPECT_VALUE:
                 if current_char:
@@ -265,12 +253,19 @@ class Template:
                 if rs[j][1] is ParentStates.ARRAY:
                     stack[-1].append(tmp)
                 elif rs[j][1] is ParentStates.OBJECT:
-                    key = stack.pop()
+                    key = rs[j][2]
                     stack[-1][key] = tmp
                 else:
                     return tmp
                 j += 1
-                pop_next = True
+
+            elif rs[j][0] is RecordExpectedStates.EXPECT_COMMA:
+                if current_char.isspace():
+                    pass
+                elif current_char == ',':
+                    j += 1
+                else:
+                    raise ValueError('Error')
 
     @property
     def remainder(self):
@@ -288,6 +283,7 @@ class Template:
             array_list = []
             parent_stack = []
             record_states = []
+            key_stack = []
             i = -1
             current_char = None
 
@@ -324,26 +320,46 @@ class Template:
                         record_states.append((RecordExpectedStates.EXPECT_COMMA,
                                               ParentStates.ARRAY))
                     elif current_char == ']':
-                        array_stack[-1].append(len(record_states))
-                        array_stack[-1].append(len(record_states)+1)
-                        array_list.append(array_stack.pop())
                         parent_stack.pop()
-                        record_states.append((
-                            RecordExpectedStates.EXPECT_VALUE,
-                            ParentStates.ARRAY))
+                        record_states.pop()
+                        array_stack.pop()
+                        if parent_stack and parent_stack[-1] is ParentStates.ARRAY:
+                            array_stack[-1].pop()
                         if parent_stack:
                             if parent_stack[-1] is ParentStates.OBJECT:
-                                record_states.append((RecordExpectedStates.EXPECT_ARRAY_END,
-                                                      ParentStates.OBJECT))
+                                record_states.append((RecordExpectedStates.EXPECT_VALUE,
+                                                      ParentStates.OBJECT,
+                                                      key_stack.pop()))
                                 state = TemplateStates.OBJECT_NEXT_OR_CLOSE
                             else:
-                                record_states.append((RecordExpectedStates.EXPECT_ARRAY_END,
+                                array_stack[-1].pop()
+                                record_states.append((RecordExpectedStates.EXPECT_VALUE,
                                                       ParentStates.ARRAY))
                                 state = TemplateStates.ARRAY_NEXT_OR_CLOSE
                         else:
-                            record_states.append((RecordExpectedStates.EXPECT_ARRAY_END,
+                            record_states.append((RecordExpectedStates.EXPECT_VALUE,
                                                   ParentStates.NONE))
-                            state = TemplateStates.DONE
+                        # array_stack[-1].append(len(record_states))
+                        # array_stack[-1].append(len(record_states)+1)
+                        # array_list.append(array_stack.pop())
+                        # parent_stack.pop()
+                        # record_states.append((
+                        #     RecordExpectedStates.EXPECT_VALUE,
+                        #     ParentStates.ARRAY))
+                        # if parent_stack:
+                        #     if parent_stack[-1] is ParentStates.OBJECT:
+                        #         record_states.append((RecordExpectedStates.EXPECT_ARRAY_END,
+                        #                               ParentStates.OBJECT,
+                        #                               key_stack.pop()))
+                        #         state = TemplateStates.OBJECT_NEXT_OR_CLOSE
+                        #     else:
+                        #         record_states.append((RecordExpectedStates.EXPECT_ARRAY_END,
+                        #                               ParentStates.ARRAY))
+                        #         state = TemplateStates.ARRAY_NEXT_OR_CLOSE
+                        # else:
+                        #     record_states.append((RecordExpectedStates.EXPECT_ARRAY_END,
+                        #                           ParentStates.NONE))
+                        #     state = TemplateStates.DONE
                     else:
                         raise ValueError(err_msg('Expecting `{`, `[` or `]`', i, current_char))
 
@@ -380,22 +396,45 @@ class Template:
                                               ParentStates.ARRAY))
                         state = TemplateStates.EXPECT_ARRAY_OR_OBJECT_OR_ARRAY_CLOSE
                     elif current_char == ']':
-                        array_stack[-1].append(len(record_states))
-                        array_list.append(array_stack.pop())
-                        parent_stack.pop()
-                        if parent_stack:
-                            if parent_stack[-1] is ParentStates.OBJECT:
-                                record_states.append((RecordExpectedStates.EXPECT_ARRAY_END,
-                                                      ParentStates.OBJECT))
-                                state = TemplateStates.OBJECT_NEXT_OR_CLOSE
+                        if (record_states[-1][0] is RecordExpectedStates.EXPECT_VALUE
+                                and record_states[-2][0] is RecordExpectedStates.EXPECT_ARRAY_START):
+                            parent_stack.pop()
+                            record_states.pop()
+                            record_states.pop()
+                            array_stack.pop()
+                            if parent_stack and parent_stack[-1] is ParentStates.ARRAY:
+                                array_stack[-1].pop()
+                            if parent_stack:
+                                if parent_stack[-1] is ParentStates.OBJECT:
+                                    record_states.append((RecordExpectedStates.EXPECT_VALUE,
+                                                          ParentStates.OBJECT,
+                                                          key_stack.pop()))
+                                    state = TemplateStates.OBJECT_NEXT_OR_CLOSE
+                                else:
+                                    record_states.append((RecordExpectedStates.EXPECT_VALUE,
+                                                          ParentStates.ARRAY))
+                                    state = TemplateStates.ARRAY_NEXT_OR_CLOSE
+                            else:
+                                record_states.append((RecordExpectedStates.EXPECT_VALUE,
+                                                  ParentStates.NONE))
+                        else:
+                            array_stack[-1].append(len(record_states))
+                            array_list.append(array_stack.pop())
+                            parent_stack.pop()
+                            if parent_stack:
+                                if parent_stack[-1] is ParentStates.OBJECT:
+                                    record_states.append((RecordExpectedStates.EXPECT_ARRAY_END,
+                                                          ParentStates.OBJECT,
+                                                          key_stack.pop()))
+                                    state = TemplateStates.OBJECT_NEXT_OR_CLOSE
+                                else:
+                                    record_states.append((RecordExpectedStates.EXPECT_ARRAY_END,
+                                                          ParentStates.ARRAY))
+                                    state = TemplateStates.ARRAY_NEXT_OR_CLOSE
                             else:
                                 record_states.append((RecordExpectedStates.EXPECT_ARRAY_END,
-                                                      ParentStates.ARRAY))
-                                state = TemplateStates.ARRAY_NEXT_OR_CLOSE
-                        else:
-                            record_states.append((RecordExpectedStates.EXPECT_ARRAY_END,
-                                                  ParentStates.NONE))
-                            state = TemplateStates.DONE
+                                                      ParentStates.NONE))
+                                state = TemplateStates.DONE
                     else:
                         raise ValueError(err_msg('Expecting `,` or `]`', i, current_char))
 
@@ -416,11 +455,13 @@ class Template:
                     elif current_char == '}':
                         parent_stack.pop()
                         record_states.append((RecordExpectedStates.EXPECT_VALUE,
-                                              ParentStates.OBJECT))
+                                              ParentStates.OBJECT,
+                                              key_stack.pop()))
                         if parent_stack:
                             if parent_stack[-1] is ParentStates.OBJECT:
                                 record_states.append((RecordExpectedStates.EXPECT_OBJECT_END,
-                                                      ParentStates.OBJECT))
+                                                      ParentStates.OBJECT,
+                                                      key_stack.pop()))
                                 state = TemplateStates.OBJECT_NEXT_OR_CLOSE
                             else:
                                 record_states.append((RecordExpectedStates.EXPECT_OBJECT_END,
@@ -452,7 +493,8 @@ class Template:
                                 state = TemplateStates.ARRAY_NEXT_OR_CLOSE
                             else:
                                 record_states.append((RecordExpectedStates.EXPECT_OBJECT_END,
-                                                      ParentStates.OBJECT))
+                                                      ParentStates.OBJECT,
+                                                      key_stack.pop()))
                         else:
                             record_states.append((RecordExpectedStates.EXPECT_OBJECT_END,
                                                   ParentStates.NONE))
@@ -468,8 +510,7 @@ class Template:
                         pass
                     elif current_char == '"':
                         key_str = get_json_string(char_list)
-                        record_states.append((RecordExpectedStates.OBJECT_KEY,
-                                              key_str))
+                        key_stack.append(key_str)
                         state = TemplateStates.OBJECT_AFTER_KEY
                     elif current_char == '}':
                         parent_stack.pop()
@@ -481,7 +522,8 @@ class Template:
                         if parent_stack:
                             if parent_stack[-1] is ParentStates.OBJECT:
                                 record_states.append((rs_next,
-                                                      ParentStates.OBJECT))
+                                                      ParentStates.OBJECT,
+                                                      key_stack.pop()))
                                 state = TemplateStates.OBJECT_NEXT_OR_CLOSE
                             else:
                                 record_states.append((rs_next,
@@ -502,8 +544,7 @@ class Template:
                         pass
                     elif current_char == '"':
                         key_str = get_json_string(char_list)
-                        record_states.append((RecordExpectedStates.OBJECT_KEY,
-                                              key_str))
+                        key_stack.append(key_str)
                         state = TemplateStates.OBJECT_AFTER_KEY
                     else:
                         raise ValueError('Expecting `"`')
@@ -513,5 +554,8 @@ class Template:
         self._remainder = ''.join(reversed(char_list))
 
         for array in array_list:
-            record_states[array[-1]] = (record_states[array[-1]][0], record_states[array[-1]][1], array[-2])
+            record_states[array[-1]] = (record_states[array[-1]][0],
+                                        record_states[array[-1]][1],
+                                        record_states[array[-1]][2],
+                                        array[-2])
         self._record_states = tuple(record_states)
