@@ -30,7 +30,6 @@ class RecordExpectedStates(Enum):
     EXPECT_ARRAY_END = auto()
     EXPECT_VALUE = auto()
     EXPECT_COMMA = auto()
-    OBJECT_KEY = auto()
 
 
 @unique
@@ -216,7 +215,7 @@ class Template:
                         return tmp
                     j += 1
                 elif current_char == ',':
-                    j = rs[j][3]
+                    j = rs[j][-1]
 
             elif rs[j][0] is RecordExpectedStates.EXPECT_OBJECT_START:
                 if current_char.isspace():
@@ -552,10 +551,9 @@ class Template:
             raise TypeError('Expecting a string')
 
         self._remainder = ''.join(reversed(char_list))
-
+        print(array_list)
+        for i,x in enumerate(record_states):
+            print('{0}: {1}'.format(i,x))
         for array in array_list:
-            record_states[array[-1]] = (record_states[array[-1]][0],
-                                        record_states[array[-1]][1],
-                                        record_states[array[-1]][2],
-                                        array[-2])
+            record_states[array[-1]] = record_states[array[-1]] + (array[-2],)
         self._record_states = tuple(record_states)
