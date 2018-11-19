@@ -445,7 +445,8 @@ class Template:
                         pass
                     elif current_char == ',':
                         record_states.append((RecordExpectedStates.EXPECT_VALUE,
-                                              ParentStates.OBJECT))
+                                              ParentStates.OBJECT,
+                                              key_stack.pop()))
                         record_states.append((RecordExpectedStates.EXPECT_COMMA,
                                               ParentStates.OBJECT))
                         state = TemplateStates.EXPECT_QUOTE
