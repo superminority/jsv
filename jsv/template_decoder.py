@@ -172,7 +172,24 @@ def get_key_value_pair(char_list):
     return k, v
 
 
+def ws_trim(char_list):
+    if char_list[-1].isspace():
+        char_list.pop()
+
+
 class Template:
+    def encode(self, obj):
+        rs = self._record_states
+        out = []
+        j = 0
+        stack = [obj]
+
+        while True:
+            if rs[j][0] is RecordExpectedStates.EXPECT_ARRAY_START:
+                if not isinstance(stack[-1], list):
+                    raise ValueError('error')
+                out.append('[')
+
     def parse_record(self, s):
         stack = []
         char_list = list(reversed(s))
@@ -193,7 +210,11 @@ class Template:
                     pass
                 elif current_char == '[':
                     stack.append([])
-                    j += 1
+                    ws_trim(char_list)
+                    if char_list[-1] == ']':
+                        j = rs[j][2]
+                    else:
+                        j += 1
                 else:
                     raise ValueError('error')
 
@@ -259,6 +280,9 @@ class Template:
                     pass
                 elif current_char == ',':
                     j += 1
+                elif rs[j][1] is ParentStates.ARRAY and current_char == ']':
+                    j = rs[j][2]
+                    char_list.append(']')
                 else:
                     raise ValueError('Error')
 
@@ -310,6 +334,7 @@ class Template:
                         parent_stack.append(ParentStates.OBJECT)
                         state = TemplateStates.EXPECT_QUOTE
                     elif current_char == '[':
+                        array_stack.append([len(record_states)])
                         if parent_stack:
                             if parent_stack[-1] is ParentStates.ARRAY:
                                 array_stack[-1].append(len(record_states))
@@ -321,7 +346,6 @@ class Template:
                         else:
                             record_states.append((RecordExpectedStates.EXPECT_ARRAY_START,
                                                   ParentStates.NONE))
-                        array_stack.append([len(record_states)])
                         parent_stack.append(ParentStates.ARRAY)
                     elif current_char == ',':
                         if parent_stack and parent_stack[-1] is ParentStates.ARRAY:
@@ -376,6 +400,7 @@ class Template:
                         parent_stack.append(ParentStates.OBJECT)
                         state = TemplateStates.EXPECT_QUOTE
                     elif current_char == '[':
+                        array_stack.append([len(record_states)])
                         if parent_stack:
                             if parent_stack[-1] is ParentStates.ARRAY:
                                 array_stack[-1].append(len(record_states))
@@ -387,7 +412,6 @@ class Template:
                         else:
                             record_states.append((RecordExpectedStates.EXPECT_ARRAY_START,
                                                   ParentStates.NONE))
-                        array_stack.append([len(record_states)])
                         parent_stack.append(ParentStates.ARRAY)
                         state = TemplateStates.EXPECT_ARRAY_OR_OBJECT_OR_ARRAY_CLOSE
                     else:
@@ -511,6 +535,15 @@ class Template:
         # include index of last value entry in an array in the token
         for array in array_list:
             record_states[array[-1]] = record_states[array[-1]] + (array[-2],)
+
+        # include index of array end in commas and array starts
+        for array in array_list:
+            array_end_index = array[-1]
+            array_start_index = array[0]
+            record_states[array_start_index] = record_states[array_start_index] + (array_end_index,)
+            for comma in map(lambda x: x - 1, array[2:-1]):
+                record_states[comma] = record_states[comma] + (array_end_index,)
+        print(array_list)
 
         # delete superfluous array entries
         delete_indexes = set()
