@@ -176,19 +176,33 @@ def ws_trim(char_list):
     if char_list[-1].isspace():
         char_list.pop()
 
+def write_json_string(obj):
+    return 'asdf'
+
 
 class Template:
     def encode(self, obj):
         rs = self._record_states
         out = []
+        stack = []
         j = 0
-        stack = [obj]
+        current_obj = obj
 
-        while True:
-            if rs[j][0] is RecordExpectedStates.EXPECT_ARRAY_START:
-                if not isinstance(stack[-1], list):
-                    raise ValueError('error')
-                out.append('[')
+        if isinstance(current_obj, list):
+            if rs[j][0] is RecordExpectedStates.EXPECT_VALUE:
+                out.append(write_json_string(current_obj))
+            if rs[j][0] is not RecordExpectedStates.EXPECT_ARRAY_START:
+                raise ValueError('Expecting list')
+            j += 1
+            it = iter(current_obj)
+            out.append('[')
+            try:
+                current_obj = next(it)
+                stack.append(current_obj)
+            except StopIteration:
+                out.append(']')
+        elif isinstance(current_obj, dict):
+            if rs[j][0] is not
 
     def parse_record(self, s):
         stack = []
