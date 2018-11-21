@@ -508,7 +508,6 @@ class Template:
 
         self._remainder = ''.join(reversed(char_list))
 
-        print(array_list)
         # include index of last value entry in an array in the token
         for array in array_list:
             record_states[array[-1]] = record_states[array[-1]] + (array[-2],)
@@ -530,5 +529,40 @@ class Template:
                 record_states.pop(ind)
 
         # delete empty arrays
+        start_index = None
+        value_index = None
+        delete_list = []
+        for i, s in enumerate(record_states):
+            if start_index is None:
+                if s[0] is RecordExpectedStates.EXPECT_ARRAY_START:
+                    start_index = i
+            elif value_index is None:
+                if s[0] is RecordExpectedStates.EXPECT_ARRAY_START:
+                    pass
+                elif s[0] is RecordExpectedStates.EXPECT_VALUE:
+                    value_index = i
+                else:
+                    start_index = None
+            else:
+                if s[0] is not RecordExpectedStates.EXPECT_ARRAY_END:
+                    end_index = i - 1
+                    if i > end_index:
+                        radius = min(value_index - start_index, end_index - value_index)
+                        for j in range(value_index - radius, value_index + radius + 1):
+                            if j == value_index:
+                                end_token = record_states[j + radius]
+                                if end_token[1] is ParentStates.OBJECT:
+                                    record_states[j] = (RecordExpectedStates.EXPECT_VALUE,
+                                                        end_token[1],
+                                                        end_token[2])
+                                else:
+                                    record_states[j] = (RecordExpectedStates.EXPECT_VALUE,
+                                                        end_token[1])
+                            else:
+                                delete_list.append(j)
+                    start_index = None
+                    value_index = None
+        for ind in delete_list[::-1]:
+            record_states.pop(ind)
 
         self._record_states = tuple(record_states)
