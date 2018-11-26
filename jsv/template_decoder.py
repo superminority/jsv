@@ -75,7 +75,7 @@ def encode_objects(rs):
             stack.append(array_def)
         elif t[0] is RecordExpectedStates.EXPECT_ARRAY_END:
             fill_array.append('')
-            stack[-1]['children'].append(len(fill_array) - 1)
+            stack[-1]['extras'] = len(fill_array) - 1
             append_string(fill_array, ']')
             out = stack.pop()
         elif t[0] is RecordExpectedStates.EXPECT_OBJECT_START:
@@ -232,10 +232,6 @@ def ws_trim(char_list):
         char_list.pop()
 
 
-def write_json_string(obj):
-    return 'asdf'
-
-
 class DecodeStates(Enum):
     OBJECT_START = auto()
     OBJECT_KEYS = auto()
@@ -251,16 +247,55 @@ class Template:
     def encode(self, obj):
         fm = self._fill_map
         fa = self._fill_array[:]
-        stack = []
 
-        curr_obj = obj
-        curr_map = fm
-        while True:
-            if isinstance(curr_obj, dict):
-                if curr_map['type'] == 'value':
-                    fa[curr_map['index']] = self._json_encode(curr_obj)
-                elif curr_map['type'] == 'object':
-                    pass
+        if fm['type'] == 'object':
+            self._encode_obj(obj, fm, fa)
+        elif fm['type'] == 'array':
+            self._encode_list(obj, fm, fa)
+        else:
+            fa[obj['index']] = self._json_encode(obj)
+
+        return ''.join(fa)
+
+    def _encode_obj(self, obj, fm, fa):
+        if not isinstance(obj, dict):
+            raise ValueError('Expecting a dictionary')
+
+        extras = []
+        for k, v in obj.items():
+            if k in fm['fields']:
+                child_fm = fm['fields'][k]
+                if child_fm['type'] == 'object':
+                    self._encode_obj(v, child_fm, fa)
+                elif child_fm['type'] == 'array':
+                    self._encode_list(v, child_fm, fa)
+                else:
+                    fa[fm['index']] = self._json_encode(v)
+            else:
+                extras.append(',')
+                extras.append(self._json_encode(v))
+
+        if extras:
+            fa[fm['extras']] = ''.join(extras)
+
+    def _encode_list(self, obj, fm, fa):
+        if not isinstance(obj, list):
+            raise ValueError('Expecting a list')
+
+        extras = []
+        for i, v in enumerate(obj):
+            if i < len(obj['children']):
+                child_fm = obj['children'][i]
+                if child_fm['type'] == 'object':
+                    self._encode_obj(v, child_fm, fa)
+                elif child_fm['type'] == 'array':
+                    self._encode_list(v, child_fm, fa)
+                else:
+                    fa[fm['index']] = self._json_encode(v)
+            else:
+                child_fm = obj['children'][-1]
+                
+
 
     def parse_record(self, s):
         stack = []
