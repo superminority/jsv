@@ -53,6 +53,61 @@ class ParentStates(Enum):
 hex_re = compile('[0-9a-fA-F]')
 
 
+def append_string(arr, char):
+            if arr and isinstance(arr[-1], list):
+                arr[-1].append(char)
+            else:
+                arr.append([char])
+
+
+def encode_objects(rs):
+    fill_array = []
+    stack = []
+
+    for t in rs:
+        if t[0] is RecordExpectedStates.EXPECT_ARRAY_START:
+            append_string(fill_array, '[')
+            array_def = {'type': 'array', 'children': []}
+            if t[1] is ParentStates.OBJECT:
+                stack[-1]['fields'][t[2]] = array_def
+            elif t[1] is ParentStates.ARRAY:
+                stack[-1]['children'].append(array_def)
+            stack.append(array_def)
+        elif t[0] is RecordExpectedStates.EXPECT_ARRAY_END:
+            fill_array.append('')
+            stack[-1]['children'].append(len(fill_array) - 1)
+            append_string(fill_array, ']')
+            out = stack.pop()
+        elif t[0] is RecordExpectedStates.EXPECT_OBJECT_START:
+            append_string(fill_array, '{')
+            object_def = {'type': 'object', 'fields': {}}
+            if t[1] is ParentStates.OBJECT:
+                stack[-1]['fields'][t[2]] = object_def
+            elif t[1] is ParentStates.ARRAY:
+                stack[-1]['children'].append(object_def)
+            stack.append(object_def)
+        elif t[0] is RecordExpectedStates.EXPECT_OBJECT_END:
+            fill_array.append('')
+            stack[-1]['extras'] = len(fill_array) - 1
+            append_string(fill_array, '}')
+            out = stack.pop()
+        elif t[0] is RecordExpectedStates.EXPECT_VALUE:
+            fill_array.append('')
+            value_def = {'type': 'value', 'index': len(fill_array) - 1}
+            if t[1] is ParentStates.OBJECT:
+                stack[-1]['fields'][t[2]] = value_def
+            elif t[1] is ParentStates.ARRAY:
+                stack[-1]['children'].append(value_def)
+        elif t[0] is RecordExpectedStates.EXPECT_COMMA:
+            append_string(fill_array, ',')
+
+    for i, x in enumerate(fill_array):
+        if isinstance(x, list):
+            fill_array[i] = ''.join(x)
+
+    return fill_array, out
+
+
 def json_remainder(s_array):
     s = ''.join(reversed(s_array))
     start_len = len(s)
@@ -176,33 +231,36 @@ def ws_trim(char_list):
     if char_list[-1].isspace():
         char_list.pop()
 
+
 def write_json_string(obj):
     return 'asdf'
 
 
+class DecodeStates(Enum):
+    OBJECT_START = auto()
+    OBJECT_KEYS = auto()
+    OBJECT_END = auto()
+    ARRAY_START = auto()
+    ARRAY_BODY = auto()
+    ARRAY_TAIL = auto()
+    ARRAY_END = auto()
+    VALUE = auto()
+
+
 class Template:
     def encode(self, obj):
-        rs = self._record_states
-        out = []
+        fm = self._fill_map
+        fa = self._fill_array[:]
         stack = []
-        j = 0
-        current_obj = obj
 
-        if isinstance(current_obj, list):
-            if rs[j][0] is RecordExpectedStates.EXPECT_VALUE:
-                out.append(write_json_string(current_obj))
-            if rs[j][0] is not RecordExpectedStates.EXPECT_ARRAY_START:
-                raise ValueError('Expecting list')
-            j += 1
-            it = iter(current_obj)
-            out.append('[')
-            try:
-                current_obj = next(it)
-                stack.append(current_obj)
-            except StopIteration:
-                out.append(']')
-        elif isinstance(current_obj, dict):
-            if rs[j][0] is not
+        curr_obj = obj
+        curr_map = fm
+        while True:
+            if isinstance(curr_obj, dict):
+                if curr_map['type'] == 'value':
+                    fa[curr_map['index']] = self._json_encode(curr_obj)
+                elif curr_map['type'] == 'object':
+                    pass
 
     def parse_record(self, s):
         stack = []
@@ -308,6 +366,8 @@ class Template:
         return self._root == other
 
     def __init__(self, s):
+
+        self._json_encode = json.JSONEncoder(separators=(',', ':')).encode
 
         if isinstance(s, str):
             state = TemplateStates.EXPECT_ARRAY_OR_OBJECT
@@ -557,7 +617,6 @@ class Template:
             record_states[array_start_index] = record_states[array_start_index] + (array_end_index,)
             for comma in map(lambda x: x - 1, array[2:-1]):
                 record_states[comma] = record_states[comma] + (array_end_index,)
-        print(array_list)
 
         # delete superfluous array entries
         delete_indexes = set()
@@ -613,3 +672,4 @@ class Template:
             record_states.pop(ind)
 
         self._record_states = tuple(record_states)
+        self._fill_array, self._fill_map = encode_objects(self._record_states)
