@@ -6,7 +6,7 @@ import pytest
 wellformed_db = [
     {
         'template': '[{"key_1"}]',
-        'record_states': ((RecordExpectedStates.EXPECT_ARRAY_START, ParentStates.NONE),
+        'record_states': ((RecordExpectedStates.EXPECT_ARRAY_START, ParentStates.NONE, 4),
                           (RecordExpectedStates.EXPECT_OBJECT_START, ParentStates.ARRAY),
                           (RecordExpectedStates.EXPECT_VALUE, ParentStates.OBJECT, 'key_1'),
                           (RecordExpectedStates.EXPECT_OBJECT_END, ParentStates.ARRAY),
@@ -24,7 +24,7 @@ wellformed_db = [
     },
     {
         'template': '[ {  "key_1" \t}\n]',
-        'record_states': ((RecordExpectedStates.EXPECT_ARRAY_START, ParentStates.NONE),
+        'record_states': ((RecordExpectedStates.EXPECT_ARRAY_START, ParentStates.NONE, 4),
                           (RecordExpectedStates.EXPECT_OBJECT_START, ParentStates.ARRAY),
                           (RecordExpectedStates.EXPECT_VALUE, ParentStates.OBJECT, 'key_1'),
                           (RecordExpectedStates.EXPECT_OBJECT_END, ParentStates.ARRAY),
@@ -33,7 +33,7 @@ wellformed_db = [
     {
         'template': '{"key_1":[{"key_2","key_3"}]}',
         'record_states': ((RecordExpectedStates.EXPECT_OBJECT_START, ParentStates.NONE),
-                          (RecordExpectedStates.EXPECT_ARRAY_START, ParentStates.OBJECT),
+                          (RecordExpectedStates.EXPECT_ARRAY_START, ParentStates.OBJECT, 'key_1', 7),
                           (RecordExpectedStates.EXPECT_OBJECT_START, ParentStates.ARRAY),
                           (RecordExpectedStates.EXPECT_VALUE, ParentStates.OBJECT, 'key_2'),
                           (RecordExpectedStates.EXPECT_COMMA, ParentStates.OBJECT),
@@ -82,7 +82,7 @@ wellformed_db = [
     {
         'template': '{"key_1":{"key_1_1"},"key_2"}',
         'record_states': ((RecordExpectedStates.EXPECT_OBJECT_START, ParentStates.NONE),
-                          (RecordExpectedStates.EXPECT_OBJECT_START, ParentStates.OBJECT),
+                          (RecordExpectedStates.EXPECT_OBJECT_START, ParentStates.OBJECT, 'key_1'),
                           (RecordExpectedStates.EXPECT_VALUE, ParentStates.OBJECT, 'key_1_1'),
                           (RecordExpectedStates.EXPECT_OBJECT_END, ParentStates.OBJECT, 'key_1'),
                           (RecordExpectedStates.EXPECT_COMMA, ParentStates.OBJECT),
@@ -91,11 +91,11 @@ wellformed_db = [
     },
     {
         'template': '[{"key_1"},]',
-        'record_states': ((RecordExpectedStates.EXPECT_ARRAY_START, ParentStates.NONE),
+        'record_states': ((RecordExpectedStates.EXPECT_ARRAY_START, ParentStates.NONE, 6),
                           (RecordExpectedStates.EXPECT_OBJECT_START, ParentStates.ARRAY),
                           (RecordExpectedStates.EXPECT_VALUE, ParentStates.OBJECT, 'key_1'),
                           (RecordExpectedStates.EXPECT_OBJECT_END, ParentStates.ARRAY),
-                          (RecordExpectedStates.EXPECT_COMMA, ParentStates.ARRAY),
+                          (RecordExpectedStates.EXPECT_COMMA, ParentStates.ARRAY, 6),
                           (RecordExpectedStates.EXPECT_VALUE, ParentStates.ARRAY),
                           (RecordExpectedStates.EXPECT_ARRAY_END, ParentStates.NONE, 5)),
         'valid_records': [
@@ -107,8 +107,8 @@ wellformed_db = [
     },
     {
         'template': '[[{"key_1"}]]',
-        'record_states': ((RecordExpectedStates.EXPECT_ARRAY_START, ParentStates.NONE),
-                          (RecordExpectedStates.EXPECT_ARRAY_START, ParentStates.ARRAY),
+        'record_states': ((RecordExpectedStates.EXPECT_ARRAY_START, ParentStates.NONE, 6),
+                          (RecordExpectedStates.EXPECT_ARRAY_START, ParentStates.ARRAY, 5),
                           (RecordExpectedStates.EXPECT_OBJECT_START, ParentStates.ARRAY),
                           (RecordExpectedStates.EXPECT_VALUE, ParentStates.OBJECT, 'key_1'),
                           (RecordExpectedStates.EXPECT_OBJECT_END, ParentStates.ARRAY),
@@ -141,8 +141,6 @@ def test_records(template_string, record_string, expected):
     templ = Template(template_string)
     record = templ.parse_record(record_string)
     assert record == expected
-
-
 
 
 @pytest.mark.parametrize('template_string, ex, msg', malformed)

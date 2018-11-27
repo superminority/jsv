@@ -1,6 +1,7 @@
 from enum import Enum, auto, unique
 from re import compile
 import json
+from collections import OrderedDict
 
 
 @unique
@@ -61,51 +62,35 @@ def append_string(arr, char):
 
 
 def encode_objects(rs):
-    fill_array = []
     stack = []
 
     for t in rs:
         if t[0] is RecordExpectedStates.EXPECT_ARRAY_START:
-            append_string(fill_array, '[')
-            array_def = {'type': 'array', 'children': []}
+            array_def = []
             if t[1] is ParentStates.OBJECT:
-                stack[-1]['fields'][t[2]] = array_def
+                stack[-1].update({t[2]: array_def})
             elif t[1] is ParentStates.ARRAY:
-                stack[-1]['children'].append(array_def)
+                stack[-1].append(array_def)
             stack.append(array_def)
         elif t[0] is RecordExpectedStates.EXPECT_ARRAY_END:
-            fill_array.append('')
-            stack[-1]['extras'] = len(fill_array) - 1
-            append_string(fill_array, ']')
             out = stack.pop()
         elif t[0] is RecordExpectedStates.EXPECT_OBJECT_START:
-            append_string(fill_array, '{')
-            object_def = {'type': 'object', 'fields': {}}
+            object_def = OrderedDict()
             if t[1] is ParentStates.OBJECT:
-                stack[-1]['fields'][t[2]] = object_def
+                stack[-1].update({t[2]: object_def})
             elif t[1] is ParentStates.ARRAY:
-                stack[-1]['children'].append(object_def)
+                stack[-1].append(object_def)
             stack.append(object_def)
         elif t[0] is RecordExpectedStates.EXPECT_OBJECT_END:
-            fill_array.append('')
-            stack[-1]['extras'] = len(fill_array) - 1
-            append_string(fill_array, '}')
             out = stack.pop()
         elif t[0] is RecordExpectedStates.EXPECT_VALUE:
-            fill_array.append('')
-            value_def = {'type': 'value', 'index': len(fill_array) - 1}
+            value_def = None
             if t[1] is ParentStates.OBJECT:
-                stack[-1]['fields'][t[2]] = value_def
+                stack[-1].update({t[2]: value_def})
             elif t[1] is ParentStates.ARRAY:
-                stack[-1]['children'].append(value_def)
-        elif t[0] is RecordExpectedStates.EXPECT_COMMA:
-            append_string(fill_array, ',')
+                stack[-1].append(value_def)
 
-    for i, x in enumerate(fill_array):
-        if isinstance(x, list):
-            fill_array[i] = ''.join(x)
-
-    return fill_array, out
+    return out
 
 
 def json_remainder(s_array):
@@ -246,56 +231,52 @@ class DecodeStates(Enum):
 class Template:
     def encode(self, obj):
         fm = self._fill_map
-        fa = self._fill_array[:]
 
-        if fm['type'] == 'object':
-            self._encode_obj(obj, fm, fa)
-        elif fm['type'] == 'array':
-            self._encode_list(obj, fm, fa)
+        if isinstance(fm, OrderedDict):
+            return self._encode_obj(obj, fm)
+        elif isinstance(fm, list):
+            return self._encode_list(obj, fm)
         else:
-            fa[obj['index']] = self._json_encode(obj)
+            return self._json_encode(obj)
 
-        return ''.join(fa)
-
-    def _encode_obj(self, obj, fm, fa):
+    def _encode_obj(self, obj, fm):
         if not isinstance(obj, dict):
             raise ValueError('Expecting a dictionary')
 
-        extras = []
+        entries = [''] * len(fm)
+        indexes = list(fm.keys())
         for k, v in obj.items():
-            if k in fm['fields']:
-                child_fm = fm['fields'][k]
-                if child_fm['type'] == 'object':
-                    self._encode_obj(v, child_fm, fa)
-                elif child_fm['type'] == 'array':
-                    self._encode_list(v, child_fm, fa)
+            if k in fm:
+                child_fm = fm[k]
+                if isinstance(child_fm, OrderedDict):
+                    entries[indexes.index(k)] = self._encode_obj(v, child_fm)
+                elif isinstance(child_fm, list):
+                    entries[indexes.index(k)] = self._encode_list(v, child_fm)
                 else:
-                    fa[fm['index']] = self._json_encode(v)
+                    entries[indexes.index(k)] = self._json_encode(v)
             else:
-                extras.append(',')
-                extras.append(self._json_encode(v))
+                entries.append('"{0}":{1}'.format(k, self._json_encode(v)))
 
-        if extras:
-            fa[fm['extras']] = ''.join(extras)
+        return '{{{}}}'.format(','.join(entries))
 
-    def _encode_list(self, obj, fm, fa):
-        if not isinstance(obj, list):
+    def _encode_list(self, arr, fm):
+        if not isinstance(arr, list):
             raise ValueError('Expecting a list')
 
-        extras = []
-        for i, v in enumerate(obj):
-            if i < len(obj['children']):
-                child_fm = obj['children'][i]
-                if child_fm['type'] == 'object':
-                    self._encode_obj(v, child_fm, fa)
-                elif child_fm['type'] == 'array':
-                    self._encode_list(v, child_fm, fa)
-                else:
-                    fa[fm['index']] = self._json_encode(v)
+        entries = []
+        for i, v in enumerate(arr):
+            if i < len(fm):
+                child_fm = fm[i]
             else:
-                child_fm = obj['children'][-1]
-                
+                child_fm = fm[-1]
+            if isinstance(child_fm, OrderedDict):
+                entries.append(self._encode_obj(v, child_fm))
+            elif isinstance(child_fm, list):
+                entries.append(self._encode_list(v, child_fm))
+            else:
+                entries.append(self._json_encode(v))
 
+        return '[{}]'.format(','.join(entries))
 
     def parse_record(self, s):
         stack = []
@@ -436,7 +417,8 @@ class Template:
                                                       ParentStates.ARRAY))
                             else:
                                 record_states.append((RecordExpectedStates.EXPECT_OBJECT_START,
-                                                      ParentStates.OBJECT))
+                                                      ParentStates.OBJECT,
+                                                      key_stack[-1]))
                         else:
                             record_states.append((RecordExpectedStates.EXPECT_OBJECT_START,
                                                   ParentStates.NONE))
@@ -446,12 +428,13 @@ class Template:
                         array_stack.append([len(record_states)])
                         if parent_stack:
                             if parent_stack[-1] is ParentStates.ARRAY:
-                                array_stack[-1].append(len(record_states))
+                                array_stack[-2].append(len(record_states))
                                 record_states.append((RecordExpectedStates.EXPECT_ARRAY_START,
                                                       ParentStates.ARRAY))
                             else:
                                 record_states.append((RecordExpectedStates.EXPECT_ARRAY_START,
-                                                      ParentStates.OBJECT))
+                                                      ParentStates.OBJECT,
+                                                      key_stack[-1]))
                         else:
                             record_states.append((RecordExpectedStates.EXPECT_ARRAY_START,
                                                   ParentStates.NONE))
@@ -502,7 +485,8 @@ class Template:
                                                       ParentStates.ARRAY))
                             else:
                                 record_states.append((RecordExpectedStates.EXPECT_OBJECT_START,
-                                                      ParentStates.OBJECT))
+                                                      ParentStates.OBJECT,
+                                                      key_stack[-1]))
                         else:
                             record_states.append((RecordExpectedStates.EXPECT_OBJECT_START,
                                                   ParentStates.NONE))
@@ -512,12 +496,13 @@ class Template:
                         array_stack.append([len(record_states)])
                         if parent_stack:
                             if parent_stack[-1] is ParentStates.ARRAY:
-                                array_stack[-1].append(len(record_states))
+                                array_stack[-2].append(len(record_states))
                                 record_states.append((RecordExpectedStates.EXPECT_ARRAY_START,
                                                       ParentStates.ARRAY))
                             else:
                                 record_states.append((RecordExpectedStates.EXPECT_ARRAY_START,
-                                                      ParentStates.OBJECT))
+                                                      ParentStates.OBJECT,
+                                                      key_stack[-1]))
                         else:
                             record_states.append((RecordExpectedStates.EXPECT_ARRAY_START,
                                                   ParentStates.NONE))
@@ -707,4 +692,8 @@ class Template:
             record_states.pop(ind)
 
         self._record_states = tuple(record_states)
-        self._fill_array, self._fill_map = encode_objects(self._record_states)
+        self._fill_map = encode_objects(self._record_states)
+
+
+if __name__ == '__main__':
+    t = Template('[[{"key_1"}]]')
