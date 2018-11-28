@@ -14,11 +14,11 @@ wellformed_db = [
         'valid_records': [
             {
                 'record_string': '[{1}]',
-                'expected': [{'key_1': 1}]
+                'object': [{'key_1': 1}]
             },
             {
                 'record_string': '[{1},{"two"},{3.0}]',
-                'expected': [{'key_1': 1}, {'key_1': 'two'}, {'key_1': 3.0}]
+                'object': [{'key_1': 1}, {'key_1': 'two'}, {'key_1': 3.0}]
             }
         ]
     },
@@ -44,11 +44,11 @@ wellformed_db = [
         'valid_records': [
             {
                 'record_string': '{[{"two",3}]}',
-                'expected': {'key_1': [{'key_2': "two", 'key_3': 3}]}
+                'object': {'key_1': [{'key_2': "two", 'key_3': 3}]}
             },
             {
                 'record_string': '{[{"two",3},{4,"five"}],"key_4":{"sub_key":"value"}}',
-                'expected': {'key_1': [{'key_2': "two", 'key_3': 3}, {'key_2': 4, 'key_3': "five"}],
+                'object': {'key_1': [{'key_2': "two", 'key_3': 3}, {'key_2': 4, 'key_3': "five"}],
                              'key_4': {'sub_key': 'value'}}
             }
         ]
@@ -67,15 +67,15 @@ wellformed_db = [
         'valid_records': [
             {
                 'record_string': '{1,2,3,4}',
-                'expected': {'key_1': 1, 'key_2': 2, 'key_3': 3, 'key_4': 4}
+                'object': {'key_1': 1, 'key_2': 2, 'key_3': 3, 'key_4': 4}
             },
             {
                 'record_string': '{1,2,3,4,"key_5":5}',
-                'expected': {'key_1': 1, 'key_2': 2, 'key_3': 3, 'key_4': 4, 'key_5': 5}
+                'object': {'key_1': 1, 'key_2': 2, 'key_3': 3, 'key_4': 4, 'key_5': 5}
             },
             {
                 'record_string': '{1,2,3,4,"key_5":5,"key_6":"six"}',
-                'expected': {'key_1': 1, 'key_2': 2, 'key_3': 3, 'key_4': 4, 'key_5': 5, 'key_6': 'six'}
+                'object': {'key_1': 1, 'key_2': 2, 'key_3': 3, 'key_4': 4, 'key_5': 5, 'key_6': 'six'}
             }
         ]
     },
@@ -101,7 +101,7 @@ wellformed_db = [
         'valid_records': [
             {
                 'record_string': '[{"value_1"},3,{"key_2":"value_2"}]',
-                'expected': [{'key_1': 'value_1'}, 3, {'key_2': 'value_2'}]
+                'object': [{'key_1': 'value_1'}, 3, {'key_2': 'value_2'}]
             }
         ]
     },
@@ -114,6 +114,9 @@ wellformed_db = [
                           (RecordExpectedStates.EXPECT_OBJECT_END, ParentStates.ARRAY),
                           (RecordExpectedStates.EXPECT_ARRAY_END, ParentStates.ARRAY, 2),
                           (RecordExpectedStates.EXPECT_ARRAY_END, ParentStates.NONE, 1))
+    },
+    {
+        'template': '[{"k1"},{"k1"}]'
     }
 ]
 
@@ -122,12 +125,12 @@ malformed = [
     ('{"key_1"', IndexError, 'End of string reached unexpectedly')
 ]
 
-parse_records = []
+decode = []
 for wf in wellformed_db:
     if 'valid_records' in wf:
         template = wf['template']
         for vr in wf['valid_records']:
-            parse_records.append((template, vr['record_string'], vr['expected']))
+            decode.append((template, vr['record_string'], vr['object']))
 
 
 @pytest.mark.parametrize('template_string, expected', [(s['template'], s['record_states']) for s in wellformed_db])
@@ -136,11 +139,18 @@ def test_template_object(template_string, expected):
     assert obj._record_states == expected
 
 
-@pytest.mark.parametrize('template_string, record_string, expected', parse_records)
-def test_records(template_string, record_string, expected):
+@pytest.mark.parametrize('template_string, record_string, expected', decode)
+def test_decode(template_string, record_string, expected):
     templ = Template(template_string)
-    record = templ.parse_record(record_string)
+    record = templ.decode(record_string)
     assert record == expected
+
+
+@pytest.mark.parametrize('template_string, expected, obj', decode)
+def test_encode(template_string, expected, obj):
+    templ = Template(template_string)
+    record_string = templ.encode(obj)
+    assert record_string == expected
 
 
 @pytest.mark.parametrize('template_string, ex, msg', malformed)

@@ -217,6 +217,57 @@ def ws_trim(char_list):
         char_list.pop()
 
 
+def get_template_str(obj):
+    if isinstance(obj, dict):
+        return obj_to_template_str(obj)
+    elif isinstance(obj, list):
+        return arr_to_template_str(obj)
+
+    raise ValueError('Expecting object or array')
+
+
+def arr_to_template_str(arr):
+    if len(arr) <= 0:
+        return None
+
+    out_arr = []
+    for v in arr:
+        if isinstance(v, dict):
+            arr_str = obj_to_template_str(v)
+        elif isinstance(v, list):
+            arr_str = arr_to_template_str(v)
+        else:
+            arr_str = None
+
+        if arr_str is None:
+            out_arr.append('')
+        else:
+            out_arr.append('{}'.format(arr_str))
+
+    return '[{}]'.format(','.join(out_arr))
+
+
+def obj_to_template_str(obj):
+    if len(obj) <= 0:
+        return None
+
+    out_arr = []
+    for k, v in obj.items():
+        if isinstance(v, dict):
+            obj_str = obj_to_template_str(v)
+        elif isinstance(v, list):
+            obj_str = arr_to_template_str(v)
+        else:
+            obj_str = None
+
+        if obj_str is None:
+            out_arr.append('"{}"'.format(k))
+        else:
+            out_arr.append('"{0}":{1}'.format(k, obj_str))
+
+    return '{{{}}}'.format(','.join(out_arr))
+
+
 class DecodeStates(Enum):
     OBJECT_START = auto()
     OBJECT_KEYS = auto()
@@ -278,7 +329,7 @@ class Template:
 
         return '[{}]'.format(','.join(entries))
 
-    def parse_record(self, s):
+    def decode(self, s):
         stack = []
         char_list = list(reversed(s))
         j = 0
