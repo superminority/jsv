@@ -2,6 +2,7 @@ from enum import Enum, auto, unique
 from re import compile
 import json
 from collections import OrderedDict
+from bisect import bisect_right
 
 
 @unique
@@ -282,11 +283,10 @@ class DecodeStates(Enum):
 def tokenize_template_string(s):
     state = TemplateStates.EXPECT_ARRAY_OR_OBJECT
     char_list = list(reversed(s))
-    parent_stack = []
-    record_states = []
-    key_stack = []
+    val = None
     i = -1
     current_char = None
+    stack = []
 
     while state is not TemplateStates.DONE:
         try:
@@ -302,65 +302,23 @@ def tokenize_template_string(s):
             if current_char.isspace():
                 pass
             elif current_char == '{':
-                if parent_stack:
-                    if parent_stack[-1] is ParentStates.ARRAY:
-                        record_states.append({
-                            'state': RecordExpectedStates.EXPECT_OBJECT_START,
-                            'parent': ParentStates.ARRAY
-                        })
-                    else:
-                        record_states.append({
-                            'state': RecordExpectedStates.EXPECT_OBJECT_START,
-                            'parent': ParentStates.OBJECT,
-                            'key': key_stack[-1]
-                        })
-                else:
-                    record_states.append({
-                        'state': RecordExpectedStates.EXPECT_OBJECT_START,
-                        'parent': ParentStates.NONE
-                    })
-                parent_stack.append(ParentStates.OBJECT)
+                stack.append(OrderedDict())
                 state = TemplateStates.EXPECT_QUOTE
             elif current_char == '[':
-                if parent_stack:
-                    if parent_stack[-1] is ParentStates.ARRAY:
-                        record_states.append({
-                            'state': RecordExpectedStates.EXPECT_ARRAY_START,
-                            'parent': ParentStates.ARRAY
-                        })
-                    else:
-                        record_states.append({
-                            'state': RecordExpectedStates.EXPECT_ARRAY_START,
-                            'parent': ParentStates.OBJECT,
-                            'key': key_stack[-1]
-                        })
-                else:
-                    record_states.append((RecordExpectedStates.EXPECT_ARRAY_START,
-                                          ParentStates.NONE))
-                parent_stack.append(ParentStates.ARRAY)
+                stack.append([])
             elif current_char == ',':
-                record_states.append((RecordExpectedStates.EXPECT_VALUE,
-                                      ParentStates.ARRAY))
-                record_states.append((RecordExpectedStates.EXPECT_COMMA,
-                                      ParentStates.ARRAY))
+                stack[-1].append(None)
             elif current_char == ']':
-                parent_stack.pop()
-                record_states.append((
-                    RecordExpectedStates.EXPECT_VALUE,
-                    ParentStates.ARRAY))
-                if parent_stack:
-                    if parent_stack[-1] is ParentStates.OBJECT:
-                        record_states.append((RecordExpectedStates.EXPECT_ARRAY_END,
-                                              ParentStates.OBJECT,
-                                              key_stack.pop()))
-                        state = TemplateStates.OBJECT_NEXT_OR_CLOSE
-                    else:
-                        record_states.append((RecordExpectedStates.EXPECT_ARRAY_END,
-                                              ParentStates.ARRAY))
+                val = stack.pop()
+                if stack:
+                    if isinstance(stack[-1], list):
+                        stack[-1].append(val)
                         state = TemplateStates.ARRAY_NEXT_OR_CLOSE
+                    else:
+                        key = stack.pop()
+                        stack[-1].update({key: val})
+                        state = TemplateStates.OBJECT_NEXT_OR_CLOSE
                 else:
-                    record_states.append((RecordExpectedStates.EXPECT_ARRAY_END,
-                                          ParentStates.NONE))
                     state = TemplateStates.DONE
             else:
                 raise ValueError(err_msg('Expecting `{`, `[` or `]`', i, current_char))
@@ -372,32 +330,10 @@ def tokenize_template_string(s):
             if current_char.isspace():
                 pass
             elif current_char == '{':
-                if parent_stack:
-                    if parent_stack[-1] is ParentStates.ARRAY:
-                        record_states.append((RecordExpectedStates.EXPECT_OBJECT_START,
-                                              ParentStates.ARRAY))
-                    else:
-                        record_states.append((RecordExpectedStates.EXPECT_OBJECT_START,
-                                              ParentStates.OBJECT,
-                                              key_stack[-1]))
-                else:
-                    record_states.append((RecordExpectedStates.EXPECT_OBJECT_START,
-                                          ParentStates.NONE))
-                parent_stack.append(ParentStates.OBJECT)
+                stack.append(OrderedDict())
                 state = TemplateStates.EXPECT_QUOTE
             elif current_char == '[':
-                if parent_stack:
-                    if parent_stack[-1] is ParentStates.ARRAY:
-                        record_states.append((RecordExpectedStates.EXPECT_ARRAY_START,
-                                              ParentStates.ARRAY))
-                    else:
-                        record_states.append((RecordExpectedStates.EXPECT_ARRAY_START,
-                                              ParentStates.OBJECT,
-                                              key_stack[-1]))
-                else:
-                    record_states.append((RecordExpectedStates.EXPECT_ARRAY_START,
-                                          ParentStates.NONE))
-                parent_stack.append(ParentStates.ARRAY)
+                stack.append([])
                 state = TemplateStates.EXPECT_ARRAY_OR_OBJECT_OR_ARRAY_CLOSE
             else:
                 raise ValueError(err_msg('Expecting `{` or `[`', i, current_char))
@@ -409,24 +345,18 @@ def tokenize_template_string(s):
             if current_char.isspace():
                 pass
             elif current_char == ',':
-                record_states.append((RecordExpectedStates.EXPECT_COMMA,
-                                      ParentStates.ARRAY))
                 state = TemplateStates.EXPECT_ARRAY_OR_OBJECT_OR_ARRAY_CLOSE
             elif current_char == ']':
-                parent_stack.pop()
-                if parent_stack:
-                    if parent_stack[-1] is ParentStates.OBJECT:
-                        record_states.append((RecordExpectedStates.EXPECT_ARRAY_END,
-                                              ParentStates.OBJECT,
-                                              key_stack.pop()))
-                        state = TemplateStates.OBJECT_NEXT_OR_CLOSE
-                    else:
-                        record_states.append((RecordExpectedStates.EXPECT_ARRAY_END,
-                                              ParentStates.ARRAY))
+                val = stack.pop()
+                if stack:
+                    if isinstance(stack[-1], list):
+                        stack[-1].append(val)
                         state = TemplateStates.ARRAY_NEXT_OR_CLOSE
+                    else:
+                        key = stack.pop()
+                        stack[-1].update({key: val})
+                        state = TemplateStates.OBJECT_NEXT_OR_CLOSE
                 else:
-                    record_states.append((RecordExpectedStates.EXPECT_ARRAY_END,
-                                          ParentStates.NONE))
                     state = TemplateStates.DONE
             else:
                 raise ValueError(err_msg('Expecting `,` or `]`', i, current_char))
@@ -438,32 +368,24 @@ def tokenize_template_string(s):
             if current_char.isspace():
                 pass
             elif current_char == ',':
-                record_states.append((RecordExpectedStates.EXPECT_VALUE,
-                                      ParentStates.OBJECT,
-                                      key_stack.pop()))
-                record_states.append((RecordExpectedStates.EXPECT_COMMA,
-                                      ParentStates.OBJECT))
+                key = stack.pop()
+                stack[-1].update({key: None})
                 state = TemplateStates.EXPECT_QUOTE
             elif current_char == ':':
                 state = TemplateStates.EXPECT_ARRAY_OR_OBJECT
             elif current_char == '}':
-                parent_stack.pop()
-                record_states.append((RecordExpectedStates.EXPECT_VALUE,
-                                      ParentStates.OBJECT,
-                                      key_stack.pop()))
-                if parent_stack:
-                    if parent_stack[-1] is ParentStates.OBJECT:
-                        record_states.append((RecordExpectedStates.EXPECT_OBJECT_END,
-                                              ParentStates.OBJECT,
-                                              key_stack.pop()))
-                        state = TemplateStates.OBJECT_NEXT_OR_CLOSE
-                    else:
-                        record_states.append((RecordExpectedStates.EXPECT_OBJECT_END,
-                                              ParentStates.ARRAY))
+                key = stack.pop()
+                obj = stack.pop()
+                obj.update({key: None})
+                if stack:
+                    if isinstance(stack[-1], list):
+                        stack[-1].append(obj)
                         state = TemplateStates.ARRAY_NEXT_OR_CLOSE
+                    else:
+                        key = stack.pop()
+                        stack[-1].update({key: val})
+                        state = TemplateStates.OBJECT_NEXT_OR_CLOSE
                 else:
-                    record_states.append((RecordExpectedStates.EXPECT_OBJECT_END,
-                                          ParentStates.NONE))
                     state = TemplateStates.DONE
             else:
                 raise ValueError(err_msg('Expecting `,`, `:`, or `}`', i, current_char))
@@ -475,23 +397,17 @@ def tokenize_template_string(s):
             if current_char.isspace():
                 pass
             elif current_char == ',':
-                record_states.append((RecordExpectedStates.EXPECT_COMMA,
-                                      ParentStates.OBJECT))
                 state = TemplateStates.EXPECT_QUOTE
             elif current_char == '}':
-                parent_stack.pop()
-                if parent_stack:
-                    if parent_stack[-1] is ParentStates.ARRAY:
-                        record_states.append((RecordExpectedStates.EXPECT_OBJECT_END,
-                                              ParentStates.ARRAY))
+                val = stack.pop()
+                if stack:
+                    if isinstance(stack[-1], list):
+                        stack[-1].append(val)
                         state = TemplateStates.ARRAY_NEXT_OR_CLOSE
                     else:
-                        record_states.append((RecordExpectedStates.EXPECT_OBJECT_END,
-                                              ParentStates.OBJECT,
-                                              key_stack.pop()))
+                        key = stack.pop()
+                        stack[-1].update({key: val})
                 else:
-                    record_states.append((RecordExpectedStates.EXPECT_OBJECT_END,
-                                          ParentStates.NONE))
                     state = TemplateStates.DONE
             else:
                 raise ValueError(err_msg('Expecting `,` or `}`', i, current_char))
@@ -503,8 +419,7 @@ def tokenize_template_string(s):
             if current_char.isspace():
                 pass
             elif current_char == '"':
-                key_str = get_json_string(char_list)
-                key_stack.append(key_str)
+                stack.append(get_json_string(char_list))
                 state = TemplateStates.OBJECT_AFTER_KEY
             elif current_char == '}':
                 raise ValueError(err_msg('Object must contain at least 1 key', i, current_char))
@@ -513,7 +428,7 @@ def tokenize_template_string(s):
 
     remainder = ''.join(reversed(char_list))
 
-    return record_states, remainder
+    return val, remainder
 
 
 class Template:
@@ -914,6 +829,9 @@ class Template:
 
         self._remainder = ''.join(reversed(char_list))
 
+        # delete superfluous array entries
+        delete_superfluous_array_entries(record_states, array_list)
+
         # include index of last value entry in an array in the token
         for array in array_list:
             record_states[array[-1]] = record_states[array[-1]] + (array[-2],)
@@ -983,5 +901,41 @@ class Template:
         self._fill_map = encode_objects(self._record_states)
 
 
+def delete_superfluous_array_entries(rs, al):
+    delete_indexes = set()
+    for arr in al:
+        array_iter = zip(arr[-2::-1], arr[-1:1:-1])
+        a, b = next(array_iter)
+        ref_tuple = tuple(rs[a:b]) + ((RecordExpectedStates.EXPECT_COMMA, ParentStates.ARRAY),)
+        for a, b in array_iter:
+            tmp = tuple(rs[a:b])
+            if ref_tuple == tmp:
+                for ind in range(a, b):
+                    delete_indexes.add(ind)
+            else:
+                break
+
+    if not delete_indexes:
+        return False
+
+    delete_list = sorted(list(delete_indexes))
+
+    for ind in reversed(delete_list):
+        rs.pop(ind)
+
+    for arr in al:
+        dl = []
+        for i, val in enumerate(arr):
+            tmp = bisect_right(delete_list, val)
+            if val == delete_list[tmp]:
+                dl.append(i)
+            else:
+                arr[i] = arr[i] - tmp
+        for d in reversed(dl):
+            arr.pop(d)
+
+    return True
+
+
 if __name__ == '__main__':
-    t = Template('[[{"key_1"}]]')
+    t = tokenize_template_string('[{"k1"},{"k1"}]')
