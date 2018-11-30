@@ -280,6 +280,19 @@ class DecodeStates(Enum):
     VALUE = auto()
 
 
+def dedup_array(arr):
+    if len(arr) < 2:
+        return
+
+    while True:
+        if arr[-1] == arr[-2]:
+            arr.pop()
+            if len(arr) < 2:
+                break
+        else:
+            break
+
+
 def tokenize_template_string(s):
     state = TemplateStates.EXPECT_ARRAY_OR_OBJECT
     char_list = list(reversed(s))
@@ -287,6 +300,7 @@ def tokenize_template_string(s):
     i = -1
     current_char = None
     stack = []
+    has_keys = []
 
     while state is not TemplateStates.DONE:
         try:
@@ -303,13 +317,20 @@ def tokenize_template_string(s):
                 pass
             elif current_char == '{':
                 stack.append(OrderedDict())
+                has_keys.append(False)
                 state = TemplateStates.EXPECT_QUOTE
             elif current_char == '[':
                 stack.append([])
+                has_keys.append(False)
             elif current_char == ',':
                 stack[-1].append(None)
             elif current_char == ']':
-                val = stack.pop()
+                if has_keys.pop():
+                    val = stack.pop()
+                    dedup_array(val)
+                else:
+                    stack.pop()
+                    val = None
                 if stack:
                     if isinstance(stack[-1], list):
                         stack[-1].append(val)
@@ -331,9 +352,11 @@ def tokenize_template_string(s):
                 pass
             elif current_char == '{':
                 stack.append(OrderedDict())
+                has_keys.append(False)
                 state = TemplateStates.EXPECT_QUOTE
             elif current_char == '[':
                 stack.append([])
+                has_keys.append(False)
                 state = TemplateStates.EXPECT_ARRAY_OR_OBJECT_OR_ARRAY_CLOSE
             else:
                 raise ValueError(err_msg('Expecting `{` or `[`', i, current_char))
@@ -347,7 +370,12 @@ def tokenize_template_string(s):
             elif current_char == ',':
                 state = TemplateStates.EXPECT_ARRAY_OR_OBJECT_OR_ARRAY_CLOSE
             elif current_char == ']':
-                val = stack.pop()
+                if has_keys.pop():
+                    val = stack.pop()
+                    dedup_array(val)
+                else:
+                    stack.pop()
+                    val = None
                 if stack:
                     if isinstance(stack[-1], list):
                         stack[-1].append(val)
@@ -376,6 +404,7 @@ def tokenize_template_string(s):
             elif current_char == '}':
                 key = stack.pop()
                 obj = stack.pop()
+                has_keys.pop()
                 obj.update({key: None})
                 if stack:
                     if isinstance(stack[-1], list):
@@ -400,6 +429,7 @@ def tokenize_template_string(s):
                 state = TemplateStates.EXPECT_QUOTE
             elif current_char == '}':
                 val = stack.pop()
+                val = val if has_keys.pop() else None
                 if stack:
                     if isinstance(stack[-1], list):
                         stack[-1].append(val)
@@ -421,8 +451,21 @@ def tokenize_template_string(s):
             elif current_char == '"':
                 stack.append(get_json_string(char_list))
                 state = TemplateStates.OBJECT_AFTER_KEY
+                has_keys = [True] * len(has_keys)
             elif current_char == '}':
-                raise ValueError(err_msg('Object must contain at least 1 key', i, current_char))
+                val = None
+                stack.pop()
+                has_keys.pop()
+                if stack:
+                    if isinstance(stack[-1], list):
+                        stack[-1].append(val)
+                        state = TemplateStates.ARRAY_NEXT_OR_CLOSE
+                    else:
+                        key = stack.pop()
+                        stack[-1].update({key: val})
+                        state = TemplateStates.OBJECT_NEXT_OR_CLOSE
+                else:
+                    state = TemplateStates.DONE
             else:
                 raise ValueError(err_msg('Expecting `"`', i, current_char))
 
@@ -480,6 +523,41 @@ class Template:
                 entries.append(self._json_encode(v))
 
         return '[{}]'.format(','.join(entries))
+
+    def decode_array_entries(self, char_list, arr, it):
+        try:
+            c = next(it)
+        except StopIteration:
+            return
+
+        if c is None:
+            arr.append(get_json_value(char_list))
+        elif isinstance(c, list):
+            n = []
+            it_next = iter(c)
+            self.decode_array_entries(char_list, n, it_next)
+
+        for v in it:
+            if v is None:
+                arr.append(get_json_value(char_list))
+            elif
+
+    def decode2(self, s):
+        c = self._fill_map
+        char_list = list(reversed(s))
+
+        if c is None:
+            return get_json_value(char_list)
+        if isinstance(c, list):
+            out = []
+            it = iter(c)
+            self.decode_array_entries(char_list, out, it)
+            return out
+        else:
+            out = {}
+            it = iter(c.items())
+            self.decode_dict_entries(char_list, out, it)
+            return out
 
     def decode(self, s):
         stack = []
