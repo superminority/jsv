@@ -4,19 +4,62 @@ from enum import unique, Enum, auto
 from re import compile
 
 
-class Template:
-    def encode(self, obj):
-        fm = self._fill_map
+def encode_template_dict(kt):
+    out_arr = []
+    for k, v in kt.items():
+        if v:
+            if isinstance(v, list):
+                out_arr.append('{0}:{1}'.format(k, encode_template_list(v)))
+            else:
+                out_arr.append('{0}:{1}'.format(k, encode_template_dict(v)))
+        else:
+            out_arr.append(k)
 
-        if isinstance(fm, OrderedDict):
-            return encode_dict(obj, fm)
-        elif isinstance(fm, list):
-            return encode_list(obj, fm)
+    return '{{{}}}'.format(','.join(out_arr))
+
+
+def encode_template_list(kt):
+    out_arr = []
+    for v in kt:
+        if v:
+            if isinstance(v, list):
+                out_arr.append(encode_template_list(v))
+            else:
+                out_arr.append(encode_template_dict(v))
+        else:
+            out_arr.append('')
+
+    return '[{}]'.format(','.join(out_arr))
+
+
+class Template:
+    def __repr__(self):
+        if isinstance(self._key_tree, list):
+            return encode_template_list(self._key_tree)
+        elif isinstance(self._key_tree, OrderedDict):
+            return encode_template_dict(self._key_tree)
+        else:
+            return '{}'
+
+    def __init__(self, s):
+        if isinstance(s, str):
+            template_str = s
+        elif isinstance(s, dict) or isinstance(s, list) or s is None:
+            template_str = get_template_str(s)
+        self._key_tree = parse_template_string(template_str)
+
+    def encode(self, obj):
+        c = self._key_tree
+
+        if isinstance(c, OrderedDict):
+            return encode_dict(obj, c)
+        elif isinstance(c, list):
+            return encode_list(obj, c)
         else:
             return self._json_encode(obj)
 
     def decode(self, s):
-        c = self._fill_map
+        c = self._key_tree
         char_list = list(reversed(s))
 
         if c is None:
@@ -31,13 +74,6 @@ class Template:
             it = iter(c.items())
             self.decode_dict_entries(char_list, out, it)
             return out
-
-    def __init__(self, s):
-        if isinstance(s, str):
-            template_str = s
-        elif isinstance(s, dict) or isinstance(s, list) or s is None:
-            template_str = get_template_str(s)
-        self._fill_map = parse_template_string(template_str)
 
 
 def encode_dict(obj, fm):
