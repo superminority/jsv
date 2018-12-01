@@ -1,7 +1,189 @@
-from enum import Enum, auto, unique
-from re import compile
 import json
 from collections import OrderedDict
+from enum import unique, Enum, auto
+from re import compile
+
+
+class Template:
+    def encode(self, obj):
+        fm = self._fill_map
+
+        if isinstance(fm, OrderedDict):
+            return encode_dict(obj, fm)
+        elif isinstance(fm, list):
+            return encode_list(obj, fm)
+        else:
+            return self._json_encode(obj)
+
+    def decode(self, s):
+        c = self._fill_map
+        char_list = list(reversed(s))
+
+        if c is None:
+            return get_json_value(char_list)
+        if isinstance(c, list):
+            out = []
+            it = iter(c)
+            self.decode_array_entries(char_list, out, it)
+            return out
+        else:
+            out = {}
+            it = iter(c.items())
+            self.decode_dict_entries(char_list, out, it)
+            return out
+
+    def __init__(self, s):
+        if isinstance(s, str):
+            template_str = s
+        elif isinstance(s, dict) or isinstance(s, list) or s is None:
+            template_str = get_template_str(s)
+        self._fill_map = parse_template_string(template_str)
+
+
+def encode_dict(obj, fm):
+    if not isinstance(obj, dict):
+        raise ValueError('Expecting a dictionary')
+
+    entries = [''] * len(fm)
+    indexes = list(fm.keys())
+    for k, v in obj.items():
+        if k in fm:
+            child_fm = fm[k]
+            if isinstance(child_fm, OrderedDict):
+                entries[indexes.index(k)] = encode_dict(v, child_fm)
+            elif isinstance(child_fm, list):
+                entries[indexes.index(k)] = encode_list(v, child_fm)
+            else:
+                entries[indexes.index(k)] = json_encode(v)
+        else:
+            entries.append('"{0}":{1}'.format(k, json_encode(v)))
+
+    return '{{{}}}'.format(','.join(entries))
+
+
+def encode_list(arr, fm):
+    if not isinstance(arr, list):
+        raise ValueError('Expecting a list')
+
+    entries = []
+    for i, v in enumerate(arr):
+        if i < len(fm):
+            child_fm = fm[i]
+        else:
+            child_fm = fm[-1]
+        if isinstance(child_fm, OrderedDict):
+            entries.append(encode_dict(v, child_fm))
+        elif isinstance(child_fm, list):
+            entries.append(encode_list(v, child_fm))
+        else:
+            entries.append(json_encode(v))
+
+    return '[{}]'.format(','.join(entries))
+
+
+def decode_dict_entries(char_list, obj, it):
+
+    consume_next(char_list, {'{'})
+    try:
+        k, v = next(it)
+    except StopIteration:
+        raise ValueError('unexpected error')
+
+    ws_trim(char_list)
+    if char_list[-1] != ',':
+        if v is None:
+            obj[k] = get_json_value(char_list)
+        elif isinstance(v, list):
+            n = []
+            obj[k] = n
+            it_next = iter(v)
+            decode_array_entries(char_list, n, it_next)
+        else:
+            n = {}
+            obj[k] = n
+            it_next = iter(v.items())
+            decode_dict_entries(char_list, n, it_next)
+
+    for k, v in it:
+        consume_next(char_list, {','})
+        ws_trim(char_list)
+        if char_list[-1] != ',':
+            if v is None:
+                obj[k] = get_json_value(char_list)
+            elif isinstance(v, list):
+                n = []
+                obj[k] = n
+                it_next = iter(v)
+                decode_array_entries(char_list, n, it_next)
+            else:
+                n = {}
+                obj[k] = n
+                it_next = iter(v.items())
+                decode_dict_entries(char_list, n, it_next)
+
+    while True:
+        if consume_next(char_list, {'}', ','}) == '}':
+            break
+        k, v = get_key_value_pair(char_list)
+        obj[k] = v
+
+
+def decode_array_entries(char_list, arr, it):
+
+    consume_next(char_list, {'['})
+    try:
+        c = next(it)
+    except StopIteration:
+        raise ValueError('Unexpected error')
+
+    ws_trim(char_list)
+    if char_list[-1] == ']':
+        return
+
+    if c is None:
+        arr.append(get_json_value(char_list))
+    elif isinstance(c, list):
+        n = []
+        arr.append(n)
+        it_next = iter(c)
+        decode_array_entries(char_list, n, it_next)
+    else:
+        n = {}
+        arr.append(n)
+        it_next = iter(c.items())
+        decode_dict_entries(char_list, n, it_next)
+
+    for c in it:
+        if consume_next(char_list, {',', ']'}) == ']':
+            return
+        if c is None:
+            arr.append(get_json_value(char_list))
+        elif isinstance(c, list):
+            n = []
+            arr.append(n)
+            it_next = iter(c)
+            decode_array_entries(char_list, n, it_next)
+        else:
+            n = {}
+            arr.append(n)
+            it_next = iter(c.items())
+            decode_dict_entries(char_list, n, it_next)
+
+    while True:
+        if consume_next(char_list, {']', ','}) == ']':
+            break
+        if c is None:
+            arr.append(get_json_value(char_list))
+        elif isinstance(c, list):
+            n = []
+            arr.append(n)
+            it_next = iter(c)
+            decode_array_entries(char_list, n, it_next)
+        else:
+            n = {}
+            arr.append(n)
+            it_next = iter(c.items())
+            decode_dict_entries(char_list, n, it_next)
 
 
 @unique
@@ -15,206 +197,7 @@ class TemplateStates(Enum):
     EXPECT_QUOTE = auto()
 
 
-@unique
-class StringStates(Enum):
-    STRING_NEXT_OR_CLOSE = auto()
-    STRING_ESCAPE = auto()
-    STRING_HEX = auto()
-
-
-hex_re = compile('[0-9a-fA-F]')
-
-
-def json_remainder(s_array):
-    s = ''.join(reversed(s_array))
-    start_len = len(s)
-    s = s.lstrip()
-    end_len = len(s)
-    d = json.JSONDecoder()
-    v, r = d.raw_decode(s)
-    for i in range(r + start_len - end_len):
-        s_array.pop()
-    return v
-
-
-def err_msg(msg, i, c):
-    return '{0} @ index: {1}, character: {2}'.format(msg, i, c)
-
-
-def get_json_value(char_list):
-    return json_remainder(char_list)
-
-
-def get_json_string(char_list):
-    state = StringStates.STRING_NEXT_OR_CLOSE
-    string_array = []
-    current_char = None
-    i = -1
-
-    while True:
-        try:
-            i += 1
-            current_char = char_list.pop()
-        except IndexError:
-            raise IndexError(err_msg('End of string reached unexpectedly', i, current_char))
-
-        # ---------------------------
-        # State: STRING_NEXT_OR_CLOSE
-        # ---------------------------
-        if state is StringStates.STRING_NEXT_OR_CLOSE:
-            if current_char == '"':
-                return ''.join(string_array)
-            elif current_char == '\\':
-                state = StringStates.STRING_ESCAPE
-            else:
-                string_array.append(current_char)
-
-        # --------------------
-        # State: STRING_ESCAPE
-        # --------------------
-        elif state is StringStates.STRING_ESCAPE:
-            if current_char == '"':
-                string_array.append('"')
-                state = StringStates.STRING_NEXT_OR_CLOSE
-            elif current_char == '\\':
-                string_array.append('\\')
-                state = StringStates.STRING_NEXT_OR_CLOSE
-            elif current_char == '/':
-                string_array.append('/')
-                state = StringStates.STRING_NEXT_OR_CLOSE
-            elif current_char == 'b':
-                string_array.append('\b')
-                state = StringStates.STRING_NEXT_OR_CLOSE
-            elif current_char == 'f':
-                string_array.append('\f')
-                state = StringStates.STRING_NEXT_OR_CLOSE
-            elif current_char == 'n':
-                string_array.append('\n')
-                state = StringStates.STRING_NEXT_OR_CLOSE
-            elif current_char == 'r':
-                string_array.append('\r')
-                state = StringStates.STRING_NEXT_OR_CLOSE
-            elif current_char == 't':
-                string_array.append('\t')
-                state = StringStates.STRING_NEXT_OR_CLOSE
-            elif current_char == 'u':
-                hex_array = []
-                state = StringStates.STRING_HEX
-            else:
-                raise ValueError(err_msg('expecting valid escape character', i, current_char))
-
-        # -----------------
-        # State: STRING_HEX
-        # -----------------
-        elif state is StringStates.STRING_HEX:
-            if hex_re.search(current_char):
-                hex_array.append(current_char)
-                if len(hex_array) >= 4:
-                    string_array.append(bytearray.fromhex(''.join(hex_array)).decode())
-                    state = StringStates.STRING_NEXT_OR_CLOSE
-                else:
-                    hex_array.append(current_char)
-            else:
-                raise ValueError(err_msg('Expected a hex character ([0-9A-Fa-f])', i, current_char))
-
-
-def get_key_value_pair(char_list):
-    current_char = ''
-    while current_char != '"':
-        try:
-            current_char = char_list.pop()
-        except IndexError:
-            raise IndexError('error')
-
-        if not current_char.isspace() and not current_char == '"':
-            raise ValueError('error')
-
-    k = get_json_string(char_list)
-
-    current_char = ''
-    while current_char != ':':
-        try:
-            current_char = char_list.pop()
-        except IndexError:
-            raise IndexError('error')
-
-        if not current_char.isspace() and not current_char == ':':
-            raise ValueError('error')
-
-    v = get_json_value(char_list)
-    return k, v
-
-
-def ws_trim(char_list):
-    if char_list[-1].isspace():
-        char_list.pop()
-
-
-def get_template_str(obj):
-    if isinstance(obj, dict):
-        return obj_to_template_str(obj)
-    elif isinstance(obj, list):
-        return arr_to_template_str(obj)
-
-    raise ValueError('Expecting object or array')
-
-
-def arr_to_template_str(arr):
-    if len(arr) <= 0:
-        return None
-
-    out_arr = []
-    for v in arr:
-        if isinstance(v, dict):
-            arr_str = obj_to_template_str(v)
-        elif isinstance(v, list):
-            arr_str = arr_to_template_str(v)
-        else:
-            arr_str = None
-
-        if arr_str is None:
-            out_arr.append('')
-        else:
-            out_arr.append('{}'.format(arr_str))
-
-    return '[{}]'.format(','.join(out_arr))
-
-
-def obj_to_template_str(obj):
-    if len(obj) <= 0:
-        return None
-
-    out_arr = []
-    for k, v in obj.items():
-        if isinstance(v, dict):
-            obj_str = obj_to_template_str(v)
-        elif isinstance(v, list):
-            obj_str = arr_to_template_str(v)
-        else:
-            obj_str = None
-
-        if obj_str is None:
-            out_arr.append('"{}"'.format(k))
-        else:
-            out_arr.append('"{0}":{1}'.format(k, obj_str))
-
-    return '{{{}}}'.format(','.join(out_arr))
-
-
-def dedup_array(arr):
-    if len(arr) < 2:
-        return
-
-    while True:
-        if arr[-1] == arr[-2]:
-            arr.pop()
-            if len(arr) < 2:
-                break
-        else:
-            break
-
-
-def tokenize_template_string(s):
+def parse_template_string(s):
     state = TemplateStates.EXPECT_ARRAY_OR_OBJECT
     char_list = list(reversed(s))
     val = None
@@ -249,7 +232,7 @@ def tokenize_template_string(s):
                 stack[-1].append(None)
                 if has_keys.pop():
                     val = stack.pop()
-                    dedup_array(val)
+                    prune_array_end(val)
                 else:
                     stack.pop()
                     val = None
@@ -294,7 +277,7 @@ def tokenize_template_string(s):
             elif current_char == ']':
                 if has_keys.pop():
                     val = stack.pop()
-                    dedup_array(val)
+                    prune_array_end(val)
                 else:
                     stack.pop()
                     val = None
@@ -391,9 +374,180 @@ def tokenize_template_string(s):
             else:
                 raise ValueError(err_msg('Expecting `"`', i, current_char))
 
-    remainder = ''.join(reversed(char_list))
+    return val
 
-    return val, remainder
+
+def get_json_value(char_list):
+    s = ''.join(reversed(char_list))
+    start_len = len(s)
+    s = s.lstrip()
+    end_len = len(s)
+    d = json.JSONDecoder()
+    v, r = d.raw_decode(s)
+    for i in range(r + start_len - end_len):
+        char_list.pop()
+    return v
+
+
+def get_key_value_pair(char_list):
+    current_char = ''
+    while current_char != '"':
+        try:
+            current_char = char_list.pop()
+        except IndexError:
+            raise IndexError('error')
+
+        if not current_char.isspace() and not current_char == '"':
+            raise ValueError('error')
+
+    k = get_json_string(char_list)
+
+    current_char = ''
+    while current_char != ':':
+        try:
+            current_char = char_list.pop()
+        except IndexError:
+            raise IndexError('error')
+
+        if not current_char.isspace() and not current_char == ':':
+            raise ValueError('error')
+
+    v = get_json_value(char_list)
+    return k, v
+
+
+@unique
+class StringStates(Enum):
+    STRING_NEXT_OR_CLOSE = auto()
+    STRING_ESCAPE = auto()
+    STRING_HEX = auto()
+
+
+def get_json_string(char_list):
+    state = StringStates.STRING_NEXT_OR_CLOSE
+    string_array = []
+    current_char = None
+    i = -1
+
+    while True:
+        try:
+            i += 1
+            current_char = char_list.pop()
+        except IndexError:
+            raise IndexError(err_msg('End of string reached unexpectedly', i, current_char))
+
+        # ---------------------------
+        # State: STRING_NEXT_OR_CLOSE
+        # ---------------------------
+        if state is StringStates.STRING_NEXT_OR_CLOSE:
+            if current_char == '"':
+                return ''.join(string_array)
+            elif current_char == '\\':
+                state = StringStates.STRING_ESCAPE
+            else:
+                string_array.append(current_char)
+
+        # --------------------
+        # State: STRING_ESCAPE
+        # --------------------
+        elif state is StringStates.STRING_ESCAPE:
+            if current_char == '"':
+                string_array.append('"')
+                state = StringStates.STRING_NEXT_OR_CLOSE
+            elif current_char == '\\':
+                string_array.append('\\')
+                state = StringStates.STRING_NEXT_OR_CLOSE
+            elif current_char == '/':
+                string_array.append('/')
+                state = StringStates.STRING_NEXT_OR_CLOSE
+            elif current_char == 'b':
+                string_array.append('\b')
+                state = StringStates.STRING_NEXT_OR_CLOSE
+            elif current_char == 'f':
+                string_array.append('\f')
+                state = StringStates.STRING_NEXT_OR_CLOSE
+            elif current_char == 'n':
+                string_array.append('\n')
+                state = StringStates.STRING_NEXT_OR_CLOSE
+            elif current_char == 'r':
+                string_array.append('\r')
+                state = StringStates.STRING_NEXT_OR_CLOSE
+            elif current_char == 't':
+                string_array.append('\t')
+                state = StringStates.STRING_NEXT_OR_CLOSE
+            elif current_char == 'u':
+                hex_array = []
+                state = StringStates.STRING_HEX
+            else:
+                raise ValueError(err_msg('expecting valid escape character', i, current_char))
+
+        # -----------------
+        # State: STRING_HEX
+        # -----------------
+        elif state is StringStates.STRING_HEX:
+            if hex_re.search(current_char):
+                hex_array.append(current_char)
+                if len(hex_array) >= 4:
+                    string_array.append(bytearray.fromhex(''.join(hex_array)).decode())
+                    state = StringStates.STRING_NEXT_OR_CLOSE
+                else:
+                    hex_array.append(current_char)
+            else:
+                raise ValueError(err_msg('Expected a hex character ([0-9A-Fa-f])', i, current_char))
+
+
+def get_template_str(obj):
+    if not obj:
+        return None
+
+    if isinstance(obj, dict):
+        return obj_to_template_str(obj)
+    elif isinstance(obj, list):
+        return arr_to_template_str(obj)
+
+    raise ValueError('Expecting object or array')
+
+
+def obj_to_template_str(obj):
+    if len(obj) <= 0:
+        return None
+
+    out_arr = []
+    for k, v in sorted(obj.items()):
+        if isinstance(v, dict):
+            obj_str = obj_to_template_str(v)
+        elif isinstance(v, list):
+            obj_str = arr_to_template_str(v)
+        else:
+            obj_str = None
+
+        if obj_str is None:
+            out_arr.append('"{}"'.format(k))
+        else:
+            out_arr.append('"{0}":{1}'.format(k, obj_str))
+
+    return '{{{}}}'.format(','.join(out_arr))
+
+
+def arr_to_template_str(arr):
+    if len(arr) <= 0:
+        return None
+
+    out_arr = []
+    for v in arr:
+        if isinstance(v, dict):
+            arr_str = obj_to_template_str(v)
+        elif isinstance(v, list):
+            arr_str = arr_to_template_str(v)
+        else:
+            arr_str = None
+
+        if arr_str is None:
+            out_arr.append('')
+        else:
+            out_arr.append('{}'.format(arr_str))
+
+    return '[{}]'.format(','.join(out_arr))
 
 
 def consume_next(char_list, char_set):
@@ -409,186 +563,27 @@ def consume_next(char_list, char_set):
             raise ValueError('Unexpected character `{}` encountered'.format(c))
 
 
-class Template:
-    def encode(self, obj):
-        fm = self._fill_map
+def ws_trim(char_list):
+    if char_list[-1].isspace():
+        char_list.pop()
 
-        if isinstance(fm, OrderedDict):
-            return self._encode_obj(obj, fm)
-        elif isinstance(fm, list):
-            return self._encode_list(obj, fm)
-        else:
-            return self._json_encode(obj)
 
-    def _encode_obj(self, obj, fm):
-        if not isinstance(obj, dict):
-            raise ValueError('Expecting a dictionary')
+def prune_array_end(arr):
+    if len(arr) < 2:
+        return
 
-        entries = [''] * len(fm)
-        indexes = list(fm.keys())
-        for k, v in obj.items():
-            if k in fm:
-                child_fm = fm[k]
-                if isinstance(child_fm, OrderedDict):
-                    entries[indexes.index(k)] = self._encode_obj(v, child_fm)
-                elif isinstance(child_fm, list):
-                    entries[indexes.index(k)] = self._encode_list(v, child_fm)
-                else:
-                    entries[indexes.index(k)] = self._json_encode(v)
-            else:
-                entries.append('"{0}":{1}'.format(k, self._json_encode(v)))
-
-        return '{{{}}}'.format(','.join(entries))
-
-    def _encode_list(self, arr, fm):
-        if not isinstance(arr, list):
-            raise ValueError('Expecting a list')
-
-        entries = []
-        for i, v in enumerate(arr):
-            if i < len(fm):
-                child_fm = fm[i]
-            else:
-                child_fm = fm[-1]
-            if isinstance(child_fm, OrderedDict):
-                entries.append(self._encode_obj(v, child_fm))
-            elif isinstance(child_fm, list):
-                entries.append(self._encode_list(v, child_fm))
-            else:
-                entries.append(self._json_encode(v))
-
-        return '[{}]'.format(','.join(entries))
-
-    def decode_dict_entries(self, char_list, obj, it):
-
-        consume_next(char_list, {'{'})
-        try:
-            k, v = next(it)
-        except StopIteration:
-            raise ValueError('unexpected error')
-
-        ws_trim(char_list)
-        if char_list[-1] != ',':
-            if v is None:
-                obj[k] = get_json_value(char_list)
-            elif isinstance(v, list):
-                n = []
-                obj[k] = n
-                it_next = iter(v)
-                self.decode_array_entries(char_list, n, it_next)
-            else:
-                n = {}
-                obj[k] = n
-                it_next = iter(v.items())
-                self.decode_dict_entries(char_list, n, it_next)
-
-        for k, v in it:
-            consume_next(char_list, {','})
-            ws_trim(char_list)
-            if char_list[-1] != ',':
-                if v is None:
-                    obj[k] = get_json_value(char_list)
-                elif isinstance(v, list):
-                    n = []
-                    obj[k] = n
-                    it_next = iter(v)
-                    self.decode_array_entries(char_list, n, it_next)
-                else:
-                    n = {}
-                    obj[k] = n
-                    it_next = iter(v.items())
-                    self.decode_dict_entries(char_list, n, it_next)
-
-        while True:
-            if consume_next(char_list, {'}', ','}) == '}':
+    while True:
+        if arr[-1] == arr[-2]:
+            arr.pop()
+            if len(arr) < 2:
                 break
-            k, v = get_key_value_pair(char_list)
-            obj[k] = v
-
-    def decode_array_entries(self, char_list, arr, it):
-
-        consume_next(char_list, {'['})
-        try:
-            c = next(it)
-        except StopIteration:
-            raise ValueError('Unexpected error')
-
-        ws_trim(char_list)
-        if char_list[-1] == ']':
-            return
-
-        if c is None:
-            arr.append(get_json_value(char_list))
-        elif isinstance(c, list):
-            n = []
-            arr.append(n)
-            it_next = iter(c)
-            self.decode_array_entries(char_list, n, it_next)
         else:
-            n = {}
-            arr.append(n)
-            it_next = iter(c.items())
-            self.decode_dict_entries(char_list, n, it_next)
-
-        for c in it:
-            if consume_next(char_list, {',', ']'}) == ']':
-                return
-            if c is None:
-                arr.append(get_json_value(char_list))
-            elif isinstance(c, list):
-                n = []
-                arr.append(n)
-                it_next = iter(c)
-                self.decode_array_entries(char_list, n, it_next)
-            else:
-                n = {}
-                arr.append(n)
-                it_next = iter(c.items())
-                self.decode_dict_entries(char_list, n, it_next)
-
-        while True:
-            if consume_next(char_list, {']', ','}) == ']':
-                break
-            if c is None:
-                arr.append(get_json_value(char_list))
-            elif isinstance(c, list):
-                n = []
-                arr.append(n)
-                it_next = iter(c)
-                self.decode_array_entries(char_list, n, it_next)
-            else:
-                n = {}
-                arr.append(n)
-                it_next = iter(c.items())
-                self.decode_dict_entries(char_list, n, it_next)
-
-    def decode(self, s):
-        c = self._fill_map
-        char_list = list(reversed(s))
-
-        if c is None:
-            return get_json_value(char_list)
-        if isinstance(c, list):
-            out = []
-            it = iter(c)
-            self.decode_array_entries(char_list, out, it)
-            return out
-        else:
-            out = {}
-            it = iter(c.items())
-            self.decode_dict_entries(char_list, out, it)
-            return out
-
-    @property
-    def remainder(self):
-        return self._remainder
-
-    def __init__(self, s):
-
-        self._fill_map, self._remainder = tokenize_template_string(s)
-        self._json_encode = json.JSONEncoder(separators=(',', ':')).encode
+            break
 
 
-if __name__ == '__main__':
-    t = Template('[{"a","b"},,,]')
-    t.decode('[{{"keya":"vala"},["valb"]}, [[]]]')
+def err_msg(msg, i, c):
+    return '{0} @ index: {1}, character: {2}'.format(msg, i, c)
+
+
+hex_re = compile('[0-9a-fA-F]')
+json_encode = json.JSONEncoder(separators=(',', ':')).encode
