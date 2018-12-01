@@ -1,5 +1,5 @@
 
-from .template_decoder import Template
+from .template import Template
 import pytest
 
 
