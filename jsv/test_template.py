@@ -1,14 +1,18 @@
-from .template import Template
+from .template import Template, JSVTemplateDecodeError
 import pytest
 
 
 wellformed_db = [
     {
         'template': '[{"key_1"}]',
+        'template_objects': [
+            [{'key_1': None}]
+        ],
         'alt_templates': [
             '[{ "key_1" \t }   \n]',
             '[ {  "key_1" \t}\n]',
-            '[{ "key_1" : []}]'
+            '[{ "key_1" : []}]',
+            '[{"key_1"},{"key_1"}]'
         ],
         'valid_records': [
             {
@@ -23,6 +27,9 @@ wellformed_db = [
     },
     {
         'template': '{"key_1":[{"key_2","key_3"}]}',
+        'template_objects': [
+            {'key_1': [{'key_2': [2,3,4], 'key_3': None}, {'key_2': 'value', 'key_3': True}]}
+        ],
         'valid_records': [
             {
                 'record_string': '{[{"two",3}]}',
@@ -70,20 +77,16 @@ wellformed_db = [
     {
         'template': '[[{"key_1"}]]',
         'alt_templates': [
-            '[[{"key_1"}],[{"key_1"}]]'
-        ]
-    },
-    {
-        'template': '[{"k1"}]',
-        'alt_templates': [
-            '[{"k1"},{"k1"}]'
+            '[[{"key_1"}],[{"key_1"}]]',
+            '[[{"key_1"},{"key_1"}]]',
+            '[[{"key_1"},{"key_1"}],[{"key_1"},{"key_1"}]]'
         ]
     }
 ]
 
 
-malformed = [
-    ('{"key_1"', IndexError, 'End of string reached unexpectedly')
+malformed_template_db = [
+    ('{"key_1"', JSVTemplateDecodeError, 'End of string reached unexpectedly: column 7')
 ]
 
 
@@ -140,12 +143,49 @@ def test_encode_template(t_str, expected):
     assert ts == expected
 
 
-def test_decode_template_from_string():
-    pass
+def create_template_equality_list(db):
+    arr = []
+    for c in db:
+        if 'alt_templates' in c:
+            ref_template = Template(c['template'])
+            for t_str in c['alt_templates']:
+                arr.append((t_str, ref_template))
+    return arr
 
 
-def test_decode_template_from_object():
-    pass
+@pytest.mark.parametrize('t_str, expected', create_template_equality_list(wellformed_db))
+def test_template_equality(t_str, expected):
+    t = Template(t_str)
+    assert t == expected
+
+
+def create_template_nonequality_list(db):
+    arr = []
+    for i, c in enumerate(db):
+        for d in db[i + 1:]:
+            arr.append((Template(c['template']), Template(d['template'])))
+    return arr
+
+
+@pytest.mark.parametrize('t_1, t_2', create_template_nonequality_list(wellformed_db))
+def test_template_nonequality(t_1, t_2):
+    assert t_1 != t_2
+
+
+def create_decode_template_from_object_list(db):
+    arr = []
+    for c in db:
+        if 'template_objects' in c:
+            ref_template = Template(c['template'])
+            for obj in c['template_objects']:
+                arr.append((obj, ref_template))
+    return arr
+
+
+@pytest.mark.parametrize('obj, expected', create_decode_template_from_object_list(wellformed_db))
+def test_decode_template_from_object(obj, expected):
+    t = Template(obj)
+    assert t == expected
 
 
 # Test incompatible records
@@ -155,3 +195,13 @@ def test_encode_incompatible_record():
 
 def test_decode_incompatible_record():
     pass
+
+
+# Test Template __init__ exceptions
+@pytest.mark.parametrize('t_str, ex_class, ex_msg', malformed_template_db)
+def test_template_init_exceptions(t_str, ex_class, ex_msg):
+    try:
+        Template(t_str)
+    except ex_class as ex:
+        assert ex_msg == str(ex)
+

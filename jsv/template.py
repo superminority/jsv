@@ -4,7 +4,20 @@ from enum import unique, Enum, auto
 from re import compile
 
 
+class JSVTemplateDecodeError(ValueError):
+
+    def __init__(self, msg, pos):
+        errmsg = '{0}: column {1:d}'.format(msg, pos)
+        super().__init__(errmsg)
+
+
 class Template:
+    def __eq__(self, other):
+        if type(self) is type(other):
+            return self._key_tree == other._key_tree
+        else:
+            return False
+
     def __repr__(self):
         if isinstance(self._key_tree, list):
             return encode_template_list(self._key_tree)
@@ -18,6 +31,8 @@ class Template:
             template_str = s
         elif isinstance(s, dict) or isinstance(s, list) or s is None:
             template_str = get_template_str(s)
+        else:
+            raise TypeError('Expecting a string, dict or list')
         self._key_tree = parse_template_string(template_str)
 
     def encode(self, obj):
@@ -28,7 +43,7 @@ class Template:
         elif isinstance(c, list):
             return encode_list(obj, c)
         else:
-            return self._json_encode(obj)
+            return json_encode(obj)
 
     def decode(self, s):
         c = self._key_tree
@@ -237,17 +252,17 @@ def parse_template_string(s):
     state = TemplateStates.EXPECT_ARRAY_OR_OBJECT
     char_list = list(reversed(s))
     val = None
-    i = -1
-    current_char = None
     stack = []
     has_keys = []
+
+    def _loc(cl):
+        return len(s) - len(cl) - 1
 
     while state is not TemplateStates.DONE:
         try:
             current_char = char_list.pop()
         except IndexError:
-            raise IndexError(err_msg('End of string reached unexpectedly', i, current_char))
-        i += 1
+            raise JSVTemplateDecodeError('End of string reached unexpectedly', _loc(char_list))
 
         # --------------------------------------------
         # State: EXPECT_ARRAY_OR_OBJECT_OR_ARRAY_CLOSE
@@ -283,7 +298,7 @@ def parse_template_string(s):
                 else:
                     state = TemplateStates.DONE
             else:
-                raise ValueError(err_msg('Expecting `{`, `[` or `]`', i, current_char))
+                raise JSVTemplateDecodeError('Expecting `{`, `[` or `]`, got `{}`'.format(current_char), _loc(char_list))
 
         # -----------------------------
         # State: EXPECT_ARRAY_OR_OBJECT
@@ -300,7 +315,7 @@ def parse_template_string(s):
                 has_keys.append(False)
                 state = TemplateStates.EXPECT_ARRAY_OR_OBJECT_OR_ARRAY_CLOSE
             else:
-                raise ValueError(err_msg('Expecting `{` or `[`', i, current_char))
+                raise JSVTemplateDecodeError('Expecting `{` or `[`, got `{}`'.format(current_char), _loc(char_list))
 
         # --------------------------
         # State: ARRAY_NEXT_OR_CLOSE
@@ -328,7 +343,7 @@ def parse_template_string(s):
                 else:
                     state = TemplateStates.DONE
             else:
-                raise ValueError(err_msg('Expecting `,` or `]`', i, current_char))
+                raise JSVTemplateDecodeError('Expecting `,` or `]`, got `{}`'.format(current_char), _loc(char_list))
 
         # -----------------------
         # State: OBJECT_AFTER_KEY
@@ -358,7 +373,7 @@ def parse_template_string(s):
                 else:
                     state = TemplateStates.DONE
             else:
-                raise ValueError(err_msg('Expecting `,`, `:`, or `}`', i, current_char))
+                raise JSVTemplateDecodeError('Expecting `,`, `:`, or `}`, got `{}`'.format(current_char), _loc(char_list))
 
         # ---------------------------
         # State: OBJECT_NEXT_OR_CLOSE
@@ -381,7 +396,7 @@ def parse_template_string(s):
                 else:
                     state = TemplateStates.DONE
             else:
-                raise ValueError(err_msg('Expecting `,` or `}`', i, current_char))
+                raise JSVTemplateDecodeError('Expecting `,` or `}`, got `{}`'.format(current_char), _loc(char_list))
 
         # -------------------
         # State: EXPECT_QUOTE
@@ -408,7 +423,7 @@ def parse_template_string(s):
                 else:
                     state = TemplateStates.DONE
             else:
-                raise ValueError(err_msg('Expecting `"`', i, current_char))
+                raise JSVTemplateDecodeError('Expecting `"`, got `{}`'.format(current_char), _loc(char_list))
 
     return val
 
@@ -538,7 +553,7 @@ def get_template_str(obj):
 
     if isinstance(obj, dict):
         return obj_to_template_str(obj)
-    elif isinstance(obj, list):
+    elif isinstance(obj, list) or isinstance(obj, tuple):
         return arr_to_template_str(obj)
 
     raise ValueError('Expecting object or array')
@@ -552,7 +567,7 @@ def obj_to_template_str(obj):
     for k, v in sorted(obj.items()):
         if isinstance(v, dict):
             obj_str = obj_to_template_str(v)
-        elif isinstance(v, list):
+        elif isinstance(v, list) or isinstance(v, tuple):
             obj_str = arr_to_template_str(v)
         else:
             obj_str = None
@@ -573,7 +588,7 @@ def arr_to_template_str(arr):
     for v in arr:
         if isinstance(v, dict):
             arr_str = obj_to_template_str(v)
-        elif isinstance(v, list):
+        elif isinstance(v, list) or isinstance(v, tuple):
             arr_str = arr_to_template_str(v)
         else:
             arr_str = None
@@ -625,15 +640,4 @@ hex_re = compile('[0-9a-fA-F]')
 json_encode = json.JSONEncoder(separators=(',', ':')).encode
 
 if __name__ == "__main__":
-    db = {
-        'template': '[{"key_1"},]',
-        'valid_records': [
-            {
-                'record_string': '[{"value_1"},3,{"key_2":"value_2"}]',
-                'object': [{'key_1': 'value_1'}, 3, {'key_2': 'value_2'}]
-            }
-        ]
-    }
-    t = Template(db['template'])
-    s = t.encode(db['valid_records'][0]['object'])
-    print(t)
+    pass
