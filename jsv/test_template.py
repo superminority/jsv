@@ -1,4 +1,3 @@
-
 from .template import Template
 import pytest
 
@@ -6,6 +5,11 @@ import pytest
 wellformed_db = [
     {
         'template': '[{"key_1"}]',
+        'alt_templates': [
+            '[{ "key_1" \t }   \n]',
+            '[ {  "key_1" \t}\n]',
+            '[{ "key_1" : []}]'
+        ],
         'valid_records': [
             {
                 'record_string': '[{1}]',
@@ -18,9 +22,6 @@ wellformed_db = [
         ]
     },
     {
-        'template': '[ {  "key_1" \t}\n]'
-    },
-    {
         'template': '{"key_1":[{"key_2","key_3"}]}',
         'valid_records': [
             {
@@ -30,7 +31,7 @@ wellformed_db = [
             {
                 'record_string': '{[{"two",3},{4,"five"}],"key_4":{"sub_key":"value"}}',
                 'object': {'key_1': [{'key_2': "two", 'key_3': 3}, {'key_2': 4, 'key_3': "five"}],
-                             'key_4': {'sub_key': 'value'}}
+                           'key_4': {'sub_key': 'value'}}
             }
         ]
     },
@@ -56,6 +57,9 @@ wellformed_db = [
     },
     {
         'template': '[{"key_1"},]',
+        'alt_templates': [
+            '[{ "key_1": {}},,,]'
+        ],
         'valid_records': [
             {
                 'record_string': '[{"value_1"},3,{"key_2":"value_2"}]',
@@ -64,10 +68,16 @@ wellformed_db = [
         ]
     },
     {
-        'template': '[[{"key_1"}]]'
+        'template': '[[{"key_1"}]]',
+        'alt_templates': [
+            '[[{"key_1"}],[{"key_1"}]]'
+        ]
     },
     {
-        'template': '[{"k1"},{"k1"}]'
+        'template': '[{"k1"}]',
+        'alt_templates': [
+            '[{"k1"},{"k1"}]'
+        ]
     }
 ]
 
@@ -76,35 +86,72 @@ malformed = [
     ('{"key_1"', IndexError, 'End of string reached unexpectedly')
 ]
 
-decode = []
-for wf in wellformed_db:
-    if 'valid_records' in wf:
-        template = wf['template']
-        for vr in wf['valid_records']:
-            decode.append((template, vr['record_string'], vr['object']))
+
+def create_encode_record_list(db):
+    arr = []
+    for wf in db:
+        if 'valid_records' in wf:
+            template = wf['template']
+            for vr in wf['valid_records']:
+                arr.append((template, vr['object'], vr['record_string']))
+    return arr
 
 
-@pytest.mark.parametrize('template_string, expected', [(s['template'], s['record_states']) for s in wellformed_db])
-def test_template_object(template_string, expected):
-    obj = Template(template_string)
-    assert obj._record_states == expected
+# Test well-formed records
+@pytest.mark.parametrize('t_str, record, expected', create_encode_record_list(wellformed_db))
+def test_encode_record(t_str, record, expected):
+    t = Template(t_str)
+    rs = t.encode(record)
+    assert rs == expected
 
 
-@pytest.mark.parametrize('template_string, record_string, expected', decode)
-def test_decode(template_string, record_string, expected):
-    templ = Template(template_string)
-    record = templ.decode(record_string)
-    assert record == expected
+def create_decode_record_list(db):
+    arr = []
+    for wf in db:
+        if 'valid_records' in wf:
+            template = wf['template']
+            for vr in wf['valid_records']:
+                arr.append((template, vr['record_string'], vr['object']))
+    return arr
 
 
-@pytest.mark.parametrize('template_string, expected, obj', decode)
-def test_encode(template_string, expected, obj):
-    templ = Template(template_string)
-    record_string = templ.encode(obj)
-    assert record_string == expected
+@pytest.mark.parametrize('t_str, rec_str, expected', create_decode_record_list(wellformed_db))
+def test_decode_record(t_str, rec_str, expected):
+    t = Template(t_str)
+    obj = t.decode(rec_str)
+    assert obj == expected
 
 
-@pytest.mark.parametrize('template_string, ex, msg', malformed)
-def test_template_ex(template_string, ex, msg):
-    with pytest.raises(ex, message=msg):
-        Template(template_string)
+def create_encode_template_list(db):
+    arr = []
+    for c in db:
+        ref_template = c['template']
+        arr.append((ref_template, ref_template))
+        if 'alt_templates' in c:
+            for t_str in c['alt_templates']:
+                arr.append((t_str, ref_template))
+    return arr
+
+
+# Test well-formed templates
+@pytest.mark.parametrize('t_str, expected', create_encode_template_list(wellformed_db))
+def test_encode_template(t_str, expected):
+    ts = str(Template(t_str))
+    assert ts == expected
+
+
+def test_decode_template_from_string():
+    pass
+
+
+def test_decode_template_from_object():
+    pass
+
+
+# Test incompatible records
+def test_encode_incompatible_record():
+    pass
+
+
+def test_decode_incompatible_record():
+    pass

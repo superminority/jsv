@@ -4,34 +4,6 @@ from enum import unique, Enum, auto
 from re import compile
 
 
-def encode_template_dict(kt):
-    out_arr = []
-    for k, v in kt.items():
-        if v:
-            if isinstance(v, list):
-                out_arr.append('{0}:{1}'.format(k, encode_template_list(v)))
-            else:
-                out_arr.append('{0}:{1}'.format(k, encode_template_dict(v)))
-        else:
-            out_arr.append(k)
-
-    return '{{{}}}'.format(','.join(out_arr))
-
-
-def encode_template_list(kt):
-    out_arr = []
-    for v in kt:
-        if v:
-            if isinstance(v, list):
-                out_arr.append(encode_template_list(v))
-            else:
-                out_arr.append(encode_template_dict(v))
-        else:
-            out_arr.append('')
-
-    return '[{}]'.format(','.join(out_arr))
-
-
 class Template:
     def __repr__(self):
         if isinstance(self._key_tree, list):
@@ -67,12 +39,12 @@ class Template:
         if isinstance(c, list):
             out = []
             it = iter(c)
-            self.decode_array_entries(char_list, out, it)
+            decode_array_entries(char_list, out, it)
             return out
         else:
             out = {}
             it = iter(c.items())
-            self.decode_dict_entries(char_list, out, it)
+            decode_dict_entries(char_list, out, it)
             return out
 
 
@@ -220,6 +192,34 @@ def decode_array_entries(char_list, arr, it):
             arr.append(n)
             it_next = iter(c.items())
             decode_dict_entries(char_list, n, it_next)
+
+
+def encode_template_dict(kt):
+    out_arr = []
+    for k, v in kt.items():
+        if v:
+            if isinstance(v, list):
+                out_arr.append('"{0}":{1}'.format(k, encode_template_list(v)))
+            else:
+                out_arr.append('"{0}":{1}'.format(k, encode_template_dict(v)))
+        else:
+            out_arr.append('"{}"'.format(k))
+
+    return '{{{}}}'.format(','.join(out_arr))
+
+
+def encode_template_list(kt):
+    out_arr = []
+    for v in kt:
+        if v:
+            if isinstance(v, list):
+                out_arr.append(encode_template_list(v))
+            else:
+                out_arr.append(encode_template_dict(v))
+        else:
+            out_arr.append('')
+
+    return '[{}]'.format(','.join(out_arr))
 
 
 @unique
@@ -623,3 +623,17 @@ def err_msg(msg, i, c):
 
 hex_re = compile('[0-9a-fA-F]')
 json_encode = json.JSONEncoder(separators=(',', ':')).encode
+
+if __name__ == "__main__":
+    db = {
+        'template': '[{"key_1"},]',
+        'valid_records': [
+            {
+                'record_string': '[{"value_1"},3,{"key_2":"value_2"}]',
+                'object': [{'key_1': 'value_1'}, 3, {'key_2': 'value_2'}]
+            }
+        ]
+    }
+    t = Template(db['template'])
+    s = t.encode(db['valid_records'][0]['object'])
+    print(t)
