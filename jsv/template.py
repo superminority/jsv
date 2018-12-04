@@ -496,12 +496,9 @@ class StringStates(Enum):
 def get_json_string(char_list, ex_loc):
     state = StringStates.STRING_NEXT_OR_CLOSE
     string_array = []
-    current_char = None
-    i = -1
 
     while True:
         try:
-            i += 1
             current_char = char_list.pop()
         except IndexError as ex:
             raise JSVRecordDecodeError('End of string reached unexpectedly', ex_loc(char_list)) from ex
@@ -563,7 +560,7 @@ def get_json_string(char_list, ex_loc):
                 else:
                     hex_array.append(current_char)
             else:
-                raise ValueError(err_msg('Expected a hex character ([0-9A-Fa-f])', i, current_char))
+                raise JSVRecordDecodeError('Expected a hex character ([0-9A-Fa-f])', ex_loc(char_list))
 
 
 def get_template_str(obj):
@@ -620,17 +617,17 @@ def arr_to_template_str(arr):
     return '[{}]'.format(','.join(out_arr))
 
 
-def consume_next(char_list, char_set):
+def consume_next(char_list, char_set, ex_loc):
     while True:
         try:
             c = char_list.pop()
-        except IndexError:
-            raise IndexError('End of string reached unexpectedly')
+        except IndexError as ex:
+            raise JSVRecordDecodeError('End of string reached unexpectedly', ex_loc(char_list)) from ex
 
         if c in char_set:
             return c
         elif not c.isspace():
-            raise ValueError('Unexpected character `{}` encountered'.format(c))
+            raise JSVRecordDecodeError('Unexpected character `{}` encountered'.format(c), ex_loc(char_list))
 
 
 def ws_trim(char_list):
