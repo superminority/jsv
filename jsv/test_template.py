@@ -1,4 +1,4 @@
-from .template import Template, JSVTemplateDecodeError
+from .template import Template, JSVTemplateDecodeError, JSVRecordDecodeError
 import pytest
 
 
@@ -56,7 +56,19 @@ wellformed_db = [
             {
                 'record_string': '{1,2,3,4,"key_5":5,"key_6":"six"}',
                 'object': {'key_1': 1, 'key_2': 2, 'key_3': 3, 'key_4': 4, 'key_5': 5, 'key_6': 'six'}
+            },
+            {
+                'record_string': '{1,,3,}',
+                'object': {'key_1': 1, 'key_3': 3}
+            },
+            {
+                'record_string': '{1,2,3,,"key_5":5}',
+                'object': {'key_1': 1, 'key_2': 2, 'key_3': 3, 'key_5': 5}
             }
+        ],
+        'invalid_records': [
+            ('{1,2,3,,}', JSVRecordDecodeError, 'Expecting `"`: column 8'),
+            ('{1,2,3,4,', JSVRecordDecodeError, 'End of string reached unexpectedly while awaiting `"`: column 8')
         ]
     },
     {
@@ -193,8 +205,23 @@ def test_encode_incompatible_record():
     pass
 
 
-def test_decode_incompatible_record():
-    pass
+def create_decode_incompatible_record_list(db):
+    arr = []
+    for c in db:
+        if 'invalid_records' in c:
+            t = Template(c['template'])
+            for ir in c['invalid_records']:
+                arr.append((t,) + ir)
+    return arr
+
+
+@pytest.mark.parametrize('t, rec_str, ex_class, ex_msg', create_decode_incompatible_record_list(wellformed_db))
+def test_decode_incompatible_record(t, rec_str, ex_class, ex_msg):
+    try:
+        t.decode(rec_str)
+        assert False
+    except ex_class as ex:
+        assert ex_msg == str(ex)
 
 
 # Test Template __init__ exceptions
@@ -202,6 +229,7 @@ def test_decode_incompatible_record():
 def test_template_init_exceptions(t_str, ex_class, ex_msg):
     try:
         Template(t_str)
+        assert False
     except ex_class as ex:
         assert ex_msg == str(ex)
 

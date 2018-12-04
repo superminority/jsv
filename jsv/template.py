@@ -4,11 +4,23 @@ from enum import unique, Enum, auto
 from re import compile
 
 
-class JSVTemplateDecodeError(ValueError):
+class JSVDecodeError(ValueError):
 
     def __init__(self, msg, pos):
         errmsg = '{0}: column {1:d}'.format(msg, pos)
         super().__init__(errmsg)
+
+
+class JSVTemplateDecodeError(JSVDecodeError):
+
+    def __init__(self, msg, pos):
+        super().__init__(msg, pos)
+
+
+class JSVRecordDecodeError(JSVDecodeError):
+
+    def __init__(self, msg, pos):
+        super().__init__(msg, pos)
 
 
 class Template:
@@ -47,19 +59,23 @@ class Template:
 
     def decode(self, s):
         c = self._key_tree
-        char_list = list(reversed(s))
+        if isinstance(s, str):
+            char_list = list(reversed(s))
+
+        def ex_loc(cl):
+            return len(s) - len(cl) - 1
 
         if c is None:
-            return get_json_value(char_list)
+            return get_json_value(char_list, ex_loc())
         if isinstance(c, list):
             out = []
             it = iter(c)
-            decode_array_entries(char_list, out, it)
+            decode_array_entries(char_list, out, it, ex_loc)
             return out
         else:
             out = {}
-            it = iter(c.items())
-            decode_dict_entries(char_list, out, it)
+            it = is_last(c.items())
+            decode_dict_entries(char_list, out, it, ex_loc)
             return out
 
 
@@ -104,54 +120,51 @@ def encode_list(arr, fm):
     return '[{}]'.format(','.join(entries))
 
 
-def decode_dict_entries(char_list, obj, it):
+def decode_dict_entries(char_list, obj, it, ex_loc):
 
     consume_next(char_list, {'{'})
-    try:
-        k, v = next(it)
-    except StopIteration:
-        raise ValueError('unexpected error')
+    isl, (k, v) = next(it)
 
     ws_trim(char_list)
-    if char_list[-1] != ',':
+    if char_list[-1] not in ({'}', ','} if isl else {','}):
         if v is None:
-            obj[k] = get_json_value(char_list)
+            obj[k] = get_json_value(char_list, ex_loc)
         elif isinstance(v, list):
             n = []
             obj[k] = n
             it_next = iter(v)
-            decode_array_entries(char_list, n, it_next)
+            decode_array_entries(char_list, n, it_next, ex_loc)
         else:
             n = {}
             obj[k] = n
             it_next = iter(v.items())
-            decode_dict_entries(char_list, n, it_next)
+            decode_dict_entries(char_list, n, it_next, ex_loc)
 
-    for k, v in it:
+    for isl, (k, v) in it:
         consume_next(char_list, {','})
         ws_trim(char_list)
-        if char_list[-1] != ',':
+        if char_list[-1] not in ({'}', ','} if isl else {','}):
             if v is None:
-                obj[k] = get_json_value(char_list)
+                obj[k] = get_json_value(char_list, ex_loc)
             elif isinstance(v, list):
                 n = []
                 obj[k] = n
                 it_next = iter(v)
-                decode_array_entries(char_list, n, it_next)
+                decode_array_entries(char_list, n, it_next, ex_loc)
             else:
                 n = {}
                 obj[k] = n
-                it_next = iter(v.items())
-                decode_dict_entries(char_list, n, it_next)
+                it_next = is_last(v.items())
+                decode_dict_entries(char_list, n, it_next, ex_loc)
 
     while True:
         if consume_next(char_list, {'}', ','}) == '}':
             break
-        k, v = get_key_value_pair(char_list)
+        k, v = get_key_value_pair(char_list, ex_loc)
         obj[k] = v
 
 
-def decode_array_entries(char_list, arr, it):
+def decode_array_entries(char_list, arr, it, ex_loc):
 
     consume_next(char_list, {'['})
     try:
@@ -164,49 +177,49 @@ def decode_array_entries(char_list, arr, it):
         return
 
     if c is None:
-        arr.append(get_json_value(char_list))
+        arr.append(get_json_value(char_list, ex_loc))
     elif isinstance(c, list):
         n = []
         arr.append(n)
         it_next = iter(c)
-        decode_array_entries(char_list, n, it_next)
+        decode_array_entries(char_list, n, it_next, ex_loc)
     else:
         n = {}
         arr.append(n)
-        it_next = iter(c.items())
-        decode_dict_entries(char_list, n, it_next)
+        it_next = is_last(c.items())
+        decode_dict_entries(char_list, n, it_next, ex_loc)
 
     for c in it:
         if consume_next(char_list, {',', ']'}) == ']':
             return
         if c is None:
-            arr.append(get_json_value(char_list))
+            arr.append(get_json_value(char_list, ex_loc))
         elif isinstance(c, list):
             n = []
             arr.append(n)
             it_next = iter(c)
-            decode_array_entries(char_list, n, it_next)
+            decode_array_entries(char_list, n, it_next, ex_loc)
         else:
             n = {}
             arr.append(n)
-            it_next = iter(c.items())
-            decode_dict_entries(char_list, n, it_next)
+            it_next = is_last(c.items())
+            decode_dict_entries(char_list, n, it_next, ex_loc)
 
     while True:
         if consume_next(char_list, {']', ','}) == ']':
             break
         if c is None:
-            arr.append(get_json_value(char_list))
+            arr.append(get_json_value(char_list, ex_loc))
         elif isinstance(c, list):
             n = []
             arr.append(n)
             it_next = iter(c)
-            decode_array_entries(char_list, n, it_next)
+            decode_array_entries(char_list, n, it_next, ex_loc)
         else:
             n = {}
             arr.append(n)
-            it_next = iter(c.items())
-            decode_dict_entries(char_list, n, it_next)
+            it_next = is_last(c.items())
+            decode_dict_entries(char_list, n, it_next, ex_loc)
 
 
 def encode_template_dict(kt):
@@ -255,14 +268,14 @@ def parse_template_string(s):
     stack = []
     has_keys = []
 
-    def _loc(cl):
+    def ex_loc(cl):
         return len(s) - len(cl) - 1
 
     while state is not TemplateStates.DONE:
         try:
             current_char = char_list.pop()
         except IndexError:
-            raise JSVTemplateDecodeError('End of string reached unexpectedly', _loc(char_list))
+            raise JSVTemplateDecodeError('End of string reached unexpectedly', ex_loc(char_list))
 
         # --------------------------------------------
         # State: EXPECT_ARRAY_OR_OBJECT_OR_ARRAY_CLOSE
@@ -298,7 +311,8 @@ def parse_template_string(s):
                 else:
                     state = TemplateStates.DONE
             else:
-                raise JSVTemplateDecodeError('Expecting `{`, `[` or `]`, got `{}`'.format(current_char), _loc(char_list))
+                raise JSVTemplateDecodeError(
+                    'Expecting `{`, `[` or `]`, got `{}`'.format(current_char), ex_loc(char_list))
 
         # -----------------------------
         # State: EXPECT_ARRAY_OR_OBJECT
@@ -315,7 +329,7 @@ def parse_template_string(s):
                 has_keys.append(False)
                 state = TemplateStates.EXPECT_ARRAY_OR_OBJECT_OR_ARRAY_CLOSE
             else:
-                raise JSVTemplateDecodeError('Expecting `{` or `[`, got `{}`'.format(current_char), _loc(char_list))
+                raise JSVTemplateDecodeError('Expecting `{` or `[`, got `{}`'.format(current_char), ex_loc(char_list))
 
         # --------------------------
         # State: ARRAY_NEXT_OR_CLOSE
@@ -343,7 +357,7 @@ def parse_template_string(s):
                 else:
                     state = TemplateStates.DONE
             else:
-                raise JSVTemplateDecodeError('Expecting `,` or `]`, got `{}`'.format(current_char), _loc(char_list))
+                raise JSVTemplateDecodeError('Expecting `,` or `]`, got `{}`'.format(current_char), ex_loc(char_list))
 
         # -----------------------
         # State: OBJECT_AFTER_KEY
@@ -373,7 +387,7 @@ def parse_template_string(s):
                 else:
                     state = TemplateStates.DONE
             else:
-                raise JSVTemplateDecodeError('Expecting `,`, `:`, or `}`, got `{}`'.format(current_char), _loc(char_list))
+                raise JSVTemplateDecodeError('Expecting `,`, `:`, or `}`, got `{}`'.format(current_char), ex_loc(char_list))
 
         # ---------------------------
         # State: OBJECT_NEXT_OR_CLOSE
@@ -396,7 +410,7 @@ def parse_template_string(s):
                 else:
                     state = TemplateStates.DONE
             else:
-                raise JSVTemplateDecodeError('Expecting `,` or `}`, got `{}`'.format(current_char), _loc(char_list))
+                raise JSVTemplateDecodeError('Expecting `,` or `}`, got `{}`'.format(current_char), ex_loc(char_list))
 
         # -------------------
         # State: EXPECT_QUOTE
@@ -405,7 +419,7 @@ def parse_template_string(s):
             if current_char.isspace():
                 pass
             elif current_char == '"':
-                stack.append(get_json_string(char_list))
+                stack.append(get_json_string(char_list, ex_loc))
                 state = TemplateStates.OBJECT_AFTER_KEY
                 has_keys = [True] * len(has_keys)
             elif current_char == '}':
@@ -423,47 +437,52 @@ def parse_template_string(s):
                 else:
                     state = TemplateStates.DONE
             else:
-                raise JSVTemplateDecodeError('Expecting `"`, got `{}`'.format(current_char), _loc(char_list))
+                raise JSVTemplateDecodeError('Expecting `"`, got `{}`'.format(current_char), ex_loc(char_list))
 
     return val
 
 
-def get_json_value(char_list):
+def get_json_value(char_list, ex_loc):
     s = ''.join(reversed(char_list))
     start_len = len(s)
     s = s.lstrip()
     end_len = len(s)
     d = json.JSONDecoder()
-    v, r = d.raw_decode(s)
+    try:
+        v, r = d.raw_decode(s)
+    except json.JSONDecodeError:
+        raise JSVRecordDecodeError('Error decoding raw json', ex_loc(char_list))
     for i in range(r + start_len - end_len):
         char_list.pop()
     return v
 
 
-def get_key_value_pair(char_list):
+def get_key_value_pair(char_list, ex_loc):
     current_char = ''
     while current_char != '"':
         try:
             current_char = char_list.pop()
-        except IndexError:
-            raise IndexError('error')
+        except IndexError as ex:
+            raise JSVRecordDecodeError(
+                'End of string reached unexpectedly while awaiting `"`', ex_loc(char_list)) from ex
 
         if not current_char.isspace() and not current_char == '"':
-            raise ValueError('error')
+            raise JSVRecordDecodeError('Expecting `"`', ex_loc(char_list))
 
-    k = get_json_string(char_list)
+    k = get_json_string(char_list, ex_loc)
 
     current_char = ''
     while current_char != ':':
         try:
             current_char = char_list.pop()
-        except IndexError:
-            raise IndexError('error')
+        except IndexError as ex:
+            raise JSVRecordDecodeError(
+                'End of string reached unexpectedly while awaiting `:`', ex_loc(char_list)) from ex
 
         if not current_char.isspace() and not current_char == ':':
-            raise ValueError('error')
+            raise JSVRecordDecodeError('Expecting `:`', ex_loc(char_list))
 
-    v = get_json_value(char_list)
+    v = get_json_value(char_list, ex_loc)
     return k, v
 
 
@@ -474,7 +493,7 @@ class StringStates(Enum):
     STRING_HEX = auto()
 
 
-def get_json_string(char_list):
+def get_json_string(char_list, ex_loc):
     state = StringStates.STRING_NEXT_OR_CLOSE
     string_array = []
     current_char = None
@@ -484,8 +503,8 @@ def get_json_string(char_list):
         try:
             i += 1
             current_char = char_list.pop()
-        except IndexError:
-            raise IndexError(err_msg('End of string reached unexpectedly', i, current_char))
+        except IndexError as ex:
+            raise JSVRecordDecodeError('End of string reached unexpectedly', ex_loc(char_list)) from ex
 
         # ---------------------------
         # State: STRING_NEXT_OR_CLOSE
@@ -530,7 +549,7 @@ def get_json_string(char_list):
                 hex_array = []
                 state = StringStates.STRING_HEX
             else:
-                raise ValueError(err_msg('expecting valid escape character', i, current_char))
+                raise JSVRecordDecodeError('expecting valid escape character', ex_loc(char_list))
 
         # -----------------
         # State: STRING_HEX
@@ -636,8 +655,23 @@ def err_msg(msg, i, c):
     return '{0} @ index: {1}, character: {2}'.format(msg, i, c)
 
 
+def is_last(v):
+    it = iter(v)
+    e = next(it)
+    while True:
+        try:
+            nxt = next(it)
+            yield (False, e)
+            e = nxt
+        except StopIteration:
+            yield (True, e)
+            break
+
+
 hex_re = compile('[0-9a-fA-F]')
 json_encode = json.JSONEncoder(separators=(',', ':')).encode
 
 if __name__ == "__main__":
+    t = Template('{"key_1","key_2","key_3","key_4"}')
+    t.decode('{1,2,3,,"key":1}')
     pass
