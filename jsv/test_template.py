@@ -4,6 +4,15 @@ import pytest
 
 wellformed_db = [
     {
+        'template': '',
+        'valid_records': [
+            {
+                'record_string': '{"key_1":1}',
+                'object': {'key_1': 1}
+            }
+        ]
+    },
+    {
         'template': '[{"key_1"}]',
         'template_objects': [
             [{'key_1': None}]

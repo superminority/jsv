@@ -24,9 +24,12 @@ class JSVRecordDecodeError(JSVDecodeError):
 
 
 class Template:
+    def __hash__(self):
+        return hash(str(self))
+
     def __eq__(self, other):
         if type(self) is type(other):
-            return self._key_tree == other._key_tree
+            return str(self) == str(other)
         else:
             return False
 
@@ -36,7 +39,7 @@ class Template:
         elif isinstance(self._key_tree, OrderedDict):
             return encode_template_dict(self._key_tree)
         else:
-            return '{}'
+            return ''
 
     def __init__(self, s):
         if isinstance(s, str):
@@ -66,7 +69,7 @@ class Template:
             return len(s) - len(cl) - 1
 
         if c is None:
-            return get_json_value(char_list, ex_loc())
+            return get_json_value(char_list, ex_loc)
         if isinstance(c, list):
             out = []
             it = iter(c)
@@ -262,6 +265,8 @@ class TemplateStates(Enum):
 
 
 def parse_template_string(s):
+    if len(s.strip()) <= 0:
+        return None
     state = TemplateStates.EXPECT_ARRAY_OR_OBJECT
     char_list = list(reversed(s))
     val = None
