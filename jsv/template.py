@@ -122,7 +122,7 @@ def encode_list(arr, fm):
 
 def decode_dict_entries(char_list, obj, it, ex_loc):
 
-    consume_next(char_list, {'{'})
+    consume_next(char_list, {'{'}, ex_loc)
     isl, (k, v) = next(it)
 
     ws_trim(char_list)
@@ -141,7 +141,7 @@ def decode_dict_entries(char_list, obj, it, ex_loc):
             decode_dict_entries(char_list, n, it_next, ex_loc)
 
     for isl, (k, v) in it:
-        consume_next(char_list, {','})
+        consume_next(char_list, {','}, ex_loc)
         ws_trim(char_list)
         if char_list[-1] not in ({'}', ','} if isl else {','}):
             if v is None:
@@ -158,7 +158,7 @@ def decode_dict_entries(char_list, obj, it, ex_loc):
                 decode_dict_entries(char_list, n, it_next, ex_loc)
 
     while True:
-        if consume_next(char_list, {'}', ','}) == '}':
+        if consume_next(char_list, {'}', ','}, ex_loc) == '}':
             break
         k, v = get_key_value_pair(char_list, ex_loc)
         obj[k] = v
@@ -166,7 +166,7 @@ def decode_dict_entries(char_list, obj, it, ex_loc):
 
 def decode_array_entries(char_list, arr, it, ex_loc):
 
-    consume_next(char_list, {'['})
+    consume_next(char_list, {'['}, ex_loc)
     try:
         c = next(it)
     except StopIteration:
@@ -190,7 +190,7 @@ def decode_array_entries(char_list, arr, it, ex_loc):
         decode_dict_entries(char_list, n, it_next, ex_loc)
 
     for c in it:
-        if consume_next(char_list, {',', ']'}) == ']':
+        if consume_next(char_list, {',', ']'}, ex_loc) == ']':
             return
         if c is None:
             arr.append(get_json_value(char_list, ex_loc))
@@ -206,7 +206,7 @@ def decode_array_entries(char_list, arr, it, ex_loc):
             decode_dict_entries(char_list, n, it_next, ex_loc)
 
     while True:
-        if consume_next(char_list, {']', ','}) == ']':
+        if consume_next(char_list, {']', ','}, ex_loc) == ']':
             break
         if c is None:
             arr.append(get_json_value(char_list, ex_loc))
