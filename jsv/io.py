@@ -1,15 +1,31 @@
+from os import fsdecode
+from io import TextIOBase
+from sys import stdout
 import re
 from jsv.template import Template
 
 
-class TemplateSingleWriter:
-    pass
+class TemplateReader:
+    def __init__(self, fp=None, mode='rt'):
+        pass
 
 
-class TemplateMultiWriter:
-    def __init__(self, filename, mode='at'):
-        self._file_name = filename
-        self._mode = mode
+class TemplateWriter:
+    def __init__(self, fp=stdout, **kwargs):
+        if isinstance(fp, TextIOBase):
+            self._file_obj = fp
+            self._external_fp = True
+            self._file_name = None
+        else:
+            self._file_name = fsdecode(fp)
+            self._external_fp = False
+            self._file_obj = None
+
+        if 'mode' in kwargs:
+            self._mode = kwargs['mode']
+        else:
+            self._mode = 'at'
+
         self._template_dict = {}
         self._id_dict = {}
         self._tests = []
@@ -24,13 +40,47 @@ class TemplateMultiWriter:
         self._id_dict['_'] = t_obj
         self._template_dict[t_obj['template']] = t_obj
 
+        if 'template_dict' in kwargs:
+            for k, v in kwargs['template_dict'].items():
+                self.add_template(v, id=k)
+
+        if 'template_list' in kwargs:
+            for v in kwargs['template_list']:
+                self.add_template(v)
+
+        if 'template_fp' in kwargs:
+            if isinstance(kwargs['template_fp'], TextIOBase):
+                self._file_obj_tmpl = kwargs['template_fp']
+                self._ext_tmpl_fp = True
+                self._file_name_tmpl = None
+                self._mode_tmpl = None
+            else:
+                self._file_name_tmpl = fsdecode(kwargs['template_fp'])
+                self._ext_tmpl_fp = False
+                self._file_obj_tmpl = None
+                if 'template_mode' in kwargs:
+                    self._mode_tmpl = kwargs['template_mode']
+                else:
+                    self._mode_tmpl = 'at'
+            self._has_tmpl_file = True
+        else:
+            self._has_tmpl_file = False
+
     def __enter__(self):
-        self._file_obj = open(self._file_name, self._mode)
+        if not self._external_fp:
+            self._file_obj = open(self._file_name, self._mode)
+        if self._has_tmpl_file:
+            if not self._ext_tmpl_fp:
+                self._file_obj_tmpl = open(self._file_name_tmpl, self._mode_tmpl)
         return self
 
     def __exit__(self, type, value, traceback):
-        self._file_obj.close()
-        self._file_obj = None
+        if not self._external_fp:
+            self._file_obj.close()
+            self._file_obj = None
+        if self._has_tmpl_file and not self._ext_tmpl_fp:
+            self._file_obj_tmpl.close()
+            self._file_obj_tmpl = None
 
     def add_template(self, template, **kwargs):
         if 'id' in kwargs:
@@ -107,13 +157,25 @@ class TemplateMultiWriter:
                 t_obj = self._id_dict['_']
 
         if not t_obj['written']:
-            print('#{0} {1}'.format(t_obj['id'], str(t_obj['template'])), file=self._file_obj)
+            if self._has_tmpl_file:
+                fp_tmpl = self._file_obj_tmpl
+            else:
+                fp_tmpl = self._file_obj
+            print('#{0} {1}'.format(t_obj['id'], str(t_obj['template'])), file=fp_tmpl)
             t_obj['written'] = True
                     
         if t_obj['default']:
             print(t_obj['template'].encode(obj), file=self._file_obj)
         else:
             print('@{0} {1}'.format(t_obj['id'], t_obj['template'].encode(obj)), file=self._file_obj)
+
+    @property
+    def template_dict(self):
+        out = {}
+        for t_obj in self._id_dict.values():
+            out[t_obj['id']] = t_obj['template']
+
+        return out
 
 
 id_regex_str = '[a-zA-Z_0-9]+'
