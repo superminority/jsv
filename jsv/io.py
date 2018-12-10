@@ -59,10 +59,10 @@ class JSVTemplateKeys:
         td = self._template_dict
         if t in td:
             if tid in td[t]:
-                if tid == DEFAULT_TEMPLATE_ID:
-                    raise ValueError('Cannot remove the default template')
-                else:
+                if len(td[t]) > 1:
                     td[t].remove(tid)
+                else:
+                    del td[t]
             else:
                 raise KeyError(tid)
         else:
@@ -97,6 +97,8 @@ class JSVCollection:
             raise ValueError('`{}` is not a valid')
         t = get_template(tmpl)
 
+        if tid in self._id_dict:
+            self._template_keys._remove(self._id_dict[tid], tid)
         self._id_dict[tid] = t
         self._template_keys._add(t, tid)
 
@@ -121,6 +123,7 @@ class JSVCollection:
     def items(self):
         return self._id_dict.items()
 
+    @property
     def templates(self):
         return self._template_keys
 
@@ -140,7 +143,10 @@ class JSVCollection:
         if tid not in self._id_dict:
             raise KeyError(tid)
 
-        return '@{0} {1}'.format(tid, self._id_dict[tid].encode(obj))
+        if tid == DEFAULT_TEMPLATE_ID:
+            return self._id_dict[tid].encode(obj)
+        else:
+            return '@{0} {1}'.format(tid, self._id_dict[tid].encode(obj))
 
     def read_line(self, s):
         char_list = list(reversed(s))
