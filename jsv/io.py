@@ -115,6 +115,9 @@ class JSVCollection:
     def __contains__(self, tid):
         return tid in self._id_dict
 
+    def __len__(self):
+        return len(self._id_dict)
+
     def items(self):
         return self._id_dict.items()
 
