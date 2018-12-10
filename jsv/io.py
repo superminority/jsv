@@ -1,181 +1,199 @@
 from os import fsdecode
 from io import TextIOBase
 from sys import stdout
+from copy import deepcopy
 import re
 from jsv.template import Template
 
 
-class TemplateReader:
-    def __init__(self, fp=None, mode='rt'):
+DEFAULT_TEMPLATE_ID = '_'
+
+
+def get_template(t, cp=False):
+    if isinstance(t, Template):
+        if cp:
+            return deepcopy(t)
+        else:
+            return t
+    else:
+        return Template(t)
+
+
+class JSVTemplateKeys:
+    def __init__(self, id_dict):
+        self._template_dict = {}
+        for k, v in id_dict.items():
+            self._add(v, k)
+
+    def __getitem__(self, tmpl):
+        t = get_template(tmpl)
+        if t in self._template_dict:
+            tid = self._template_dict[t]
+            if len(tid) == 1:
+                for x in tid:
+                    return x
+            else:
+                return tid
+        else:
+            raise KeyError(str(t))
+
+    def __iter__(self):
+        return iter(self._template_dict)
+
+    def __contains__(self, tmpl):
+        return get_template(tmpl) in self._template_dict
+
+    def _add(self, tmpl, tid):
+        td = self._template_dict
+        if not validate_id(tid):
+            raise ValueError('template key must match regex `{}`'.format(id_regex_str))
+
+        t = get_template(tmpl)
+        if t in td:
+            td[t].add(tid)
+        else:
+            td[t] = {tid}
+
+    def _remove(self, tmpl, tid):
+        t = get_template(tmpl)
+        td = self._template_dict
+        if t in td:
+            if tid in td[t]:
+                if tid == DEFAULT_TEMPLATE_ID:
+                    raise ValueError('Cannot remove the default template')
+                else:
+                    td[t].remove(tid)
+            else:
+                raise KeyError(tid)
+        else:
+            raise KeyError(str(tmpl))
+
+
+class JSVCollection:
+    def __init__(self, template_dict=None):
+        self._id_dict = {}
+        if template_dict:
+            if isinstance(template_dict, dict):
+                for k, v in template_dict.items():
+                    if isinstance(v, Template):
+                        t = v
+                    else:
+                        t = Template(v)
+                    self._id_dict[k] = t
+            else:
+                raise TypeError('parameter `template_dict` must be a dictionary')
+        if DEFAULT_TEMPLATE_ID not in self._id_dict:
+            self._id_dict[DEFAULT_TEMPLATE_ID] = Template()
+        self._template_keys = JSVTemplateKeys(self._id_dict)
+
+    def __getitem__(self, tid):
+        if tid in self._id_dict:
+            return self._id_dict[tid]
+        else:
+            raise KeyError(tid)
+
+    def __setitem__(self, tid, tmpl):
+        if not validate_id(tid):
+            raise ValueError('`{}` is not a valid')
+        t = get_template(tmpl)
+
+        self._id_dict[tid] = t
+        self._template_keys._add(t, tid)
+
+    def __delitem__(self, tid):
+        if tid == DEFAULT_TEMPLATE_ID:
+            raise ValueError('Cannot delete the default template')
+        if tid in self._id_dict:
+            self._template_keys._remove(self._id_dict[tid], tid)
+            del self._id_dict[tid]
+        else:
+            KeyError(tid)
+
+    def __iter__(self):
+        return iter(self._id_dict)
+
+    def __contains__(self, tid):
+        return tid in self._id_dict
+
+    def items(self):
+        return self._id_dict.items()
+
+    def templates(self):
+        return self._template_keys
+
+    def get_template_line(self, tid):
+        if not isinstance(tid, str):
+            raise TypeError('argument `key` must be a string')
+
+        if tid not in self._id_dict:
+            raise KeyError(tid)
+
+        return '#{0} {1}'.format(tid, str(self._id_dict[tid]))
+
+    def get_record_line(self, obj, tid=DEFAULT_TEMPLATE_ID):
+        if not isinstance(tid, str):
+            raise TypeError('argument `key` must be a string')
+
+        if tid not in self._id_dict:
+            raise KeyError(tid)
+
+        return '@{0} {1}'.format(tid, self._id_dict[tid].encode(obj))
+
+    def read_line(self, s):
+        char_list = list(reversed(s))
+        if char_list[-1] == '@':
+            char_list.pop()
+            tid = get_tid(char_list)
+            obj = self[tid].decode(s)
+            return tid, obj
+        elif char_list[-1] == '#':
+            char_list.pop()
+            tid = get_tid(char_list)
+            tmpl = Template(''.join(reversed(char_list)))
+            return tid, tmpl
+        else:
+            return DEFAULT_TEMPLATE_ID, self._id_dict[DEFAULT_TEMPLATE_ID].decode(char_list)
+
+
+def get_tid(char_list):
+    out_arr = []
+    curr_char = char_list.pop()
+    while not curr_char == ' ':
+        if curr_char.isalpha() or curr_char.isdigit() or curr_char == '_':
+            out_arr.append(curr_char)
+        else:
+            raise ValueError('Template id must match regex `{}`'.format(id_regex_str))
+    out = ''.join(out_arr)
+    if out == '':
+        raise ValueError('Template id must not be the empty string')
+
+    return out
+
+
+class JSVReader(JSVCollection):
+    def __init__(self, template_dict=None, **kwargs):
+        super().__init__(template_dict)
+
+    def __iter__(self):
+        pass
+
+    def get_collection(self):
+        return deepcopy(self._coll)
+
+    def read(self):
         pass
 
 
-class TemplateWriter:
-    def __init__(self, fp=stdout, **kwargs):
-        if isinstance(fp, TextIOBase):
-            self._file_obj = fp
-            self._external_fp = True
-            self._file_name = None
-        else:
-            self._file_name = fsdecode(fp)
-            self._external_fp = False
-            self._file_obj = None
-
-        if 'mode' in kwargs:
-            self._mode = kwargs['mode']
-        else:
-            self._mode = 'at'
-
-        self._template_dict = {}
-        self._id_dict = {}
-        self._tests = []
-        self._file_obj = None
-
-        t_obj = {
-            'id': '_',
-            'template': Template(''),
-            'written': False,
-            'default': True
-        }
-        self._id_dict['_'] = t_obj
-        self._template_dict[t_obj['template']] = t_obj
-
-        if 'template_dict' in kwargs:
-            for k, v in kwargs['template_dict'].items():
-                self.add_template(v, id=k)
-
-        if 'template_list' in kwargs:
-            for v in kwargs['template_list']:
-                self.add_template(v)
-
-        if 'template_fp' in kwargs:
-            if isinstance(kwargs['template_fp'], TextIOBase):
-                self._file_obj_tmpl = kwargs['template_fp']
-                self._ext_tmpl_fp = True
-                self._file_name_tmpl = None
-                self._mode_tmpl = None
-            else:
-                self._file_name_tmpl = fsdecode(kwargs['template_fp'])
-                self._ext_tmpl_fp = False
-                self._file_obj_tmpl = None
-                if 'template_mode' in kwargs:
-                    self._mode_tmpl = kwargs['template_mode']
-                else:
-                    self._mode_tmpl = 'at'
-            self._has_tmpl_file = True
-        else:
-            self._has_tmpl_file = False
-
-    def __enter__(self):
-        if not self._external_fp:
-            self._file_obj = open(self._file_name, self._mode)
-        if self._has_tmpl_file:
-            if not self._ext_tmpl_fp:
-                self._file_obj_tmpl = open(self._file_name_tmpl, self._mode_tmpl)
-        return self
-
-    def __exit__(self, type, value, traceback):
-        if not self._external_fp:
-            self._file_obj.close()
-            self._file_obj = None
-        if self._has_tmpl_file and not self._ext_tmpl_fp:
-            self._file_obj_tmpl.close()
-            self._file_obj_tmpl = None
-
-    def add_template(self, template, **kwargs):
-        if 'id' in kwargs:
-            id = kwargs['id']
-            if isinstance(id, str):
-                if validate_id(id):
-                    new_id = id
-                else:
-                    raise ValueError(
-                        'Bad template id. Template id must match `{}`, and cannot be `_`'.format(id_regex_str))
-            else:
-                raise TypeError('keyword argument `id` must be a string')
-        else:
-            new_id = get_new_id(self._id_dict)
-
-        if 'default' in kwargs:
-            if not isinstance(kwargs['default'], bool):
-                raise TypeError('keyword argument `default` must be a boolean')
-            elif kwargs['default'] and 'id' in kwargs:
-                if (kwargs['default'] and (new_id != '_')) or ((not kwargs['default']) and (new_id == '_')):
-                    raise ValueError('keyword argument `default` and argument `id` are contradictory')
-            default = kwargs['default']
-        else:
-            default = new_id == '_'
-
-        if isinstance(template, Template):
-            t = template
-        else:
-            t = Template(template)
-
-        if default:
-            t_obj = {
-                'id': '_',
-                'template': t,
-                'written': False,
-                'default': True
-            }
-            new_id = '_'
-        else:
-            t_obj = {
-                'id': new_id,
-                'template': t,
-                'written': False,
-                'default': False
-            }
-        self._id_dict[new_id] = t_obj
-        self._template_dict[t] = t_obj
-
-        return t_obj['id'], t_obj['template']
-
-    def write(self, obj, **kwargs):
-        if not self._file_obj:
-            raise RuntimeError('You must be inside the context manager to write')
-
-        if 'template' in kwargs and 'id' in kwargs:
-            raise KeyError('Cannot include both `template` and `id` in keyword args')
-        else:
-            if 'template' in kwargs:
-                if isinstance(kwargs['template'], Template):
-                    t = kwargs['template']
-                else:
-                    t = Template(kwargs['template'])
-                try:
-                    t_obj = self._template_dict[t]
-                except KeyError:
-                    self.add_template(t)
-                    t_obj = self._template_dict[t]
-            elif 'id' in kwargs:
-                if kwargs['id'] in self._id_dict:
-                    t_obj = self._id_dict[kwargs['id']]
-                else:
-                    raise KeyError('id `{}` not found'.format(kwargs['id']))
-            else:
-                t_obj = self._id_dict['_']
-
-        if not t_obj['written']:
-            if self._has_tmpl_file:
-                fp_tmpl = self._file_obj_tmpl
-            else:
-                fp_tmpl = self._file_obj
-            print('#{0} {1}'.format(t_obj['id'], str(t_obj['template'])), file=fp_tmpl)
-            t_obj['written'] = True
-                    
-        if t_obj['default']:
-            print(t_obj['template'].encode(obj), file=self._file_obj)
-        else:
-            print('@{0} {1}'.format(t_obj['id'], t_obj['template'].encode(obj)), file=self._file_obj)
+class JSVWriter:
+    def __init__(self, jsv_collection, **kwargs):
+        self._coll = deepcopy(jsv_collection)
 
     @property
-    def template_dict(self):
-        out = {}
-        for t_obj in self._id_dict.values():
-            out[t_obj['id']] = t_obj['template']
+    def collection(self):
+        return self._coll
 
-        return out
+    def write(self, obj):
+        pass
 
 
 id_regex_str = '[a-zA-Z_0-9]+'
@@ -185,12 +203,3 @@ id_re = re.compile(id_regex_str)
 def validate_id(id):
     m = id_re.match(id)
     return m.group() == id
-
-
-def get_new_id(id_dict):
-    i = 0
-    while True:
-        new_id = str(i)
-        if new_id not in id_dict:
-            return new_id
-        i += 1

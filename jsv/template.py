@@ -2,6 +2,7 @@ import json
 from collections import OrderedDict
 from enum import unique, Enum, auto
 from re import compile
+from copy import copy
 
 
 class JSVDecodeError(ValueError):
@@ -41,7 +42,7 @@ class Template:
         else:
             return ''
 
-    def __init__(self, s):
+    def __init__(self, s=''):
         if isinstance(s, str):
             template_str = s
         elif isinstance(s, dict) or isinstance(s, list) or s is None:
@@ -64,6 +65,10 @@ class Template:
         c = self._key_tree
         if isinstance(s, str):
             char_list = list(reversed(s))
+        elif isinstance(s, list):
+            char_list = s
+        else:
+            raise TypeError('argument `s` must be a string or a list of characters')
 
         def ex_loc(cl):
             return len(s) - len(cl) - 1
