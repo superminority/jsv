@@ -127,7 +127,7 @@ class JSVCollection:
     def templates(self):
         return self._template_keys
 
-    def get_template_line(self, tid):
+    def get_template_line(self, tid=DEFAULT_TEMPLATE_ID):
         if not isinstance(tid, str):
             raise TypeError('argument `key` must be a string')
 
@@ -159,6 +159,7 @@ class JSVCollection:
             char_list.pop()
             tid = get_tid(char_list)
             tmpl = Template(''.join(reversed(char_list)))
+            self[tid] = tmpl
             return tid, tmpl
         else:
             return DEFAULT_TEMPLATE_ID, self._id_dict[DEFAULT_TEMPLATE_ID].decode(char_list)
@@ -172,6 +173,7 @@ def get_tid(char_list):
             out_arr.append(curr_char)
         else:
             raise ValueError('Template id must match regex `{}`'.format(id_regex_str))
+        curr_char = char_list.pop()
     out = ''.join(out_arr)
     if out == '':
         raise ValueError('Template id must not be the empty string')

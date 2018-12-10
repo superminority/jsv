@@ -40,7 +40,7 @@ class Template:
         elif isinstance(self._key_tree, OrderedDict):
             return encode_template_dict(self._key_tree)
         else:
-            return ''
+            return '{}'
 
     def __init__(self, s=''):
         if isinstance(s, str):

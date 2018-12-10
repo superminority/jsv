@@ -86,7 +86,7 @@ def test_basic_collection():
         assert True
 
 
-def test_get_template_line():
+def test_get_record_line():
     template_dict = {
         'a': Template('{"key_1"}'),
         'b': '[{"key_1"}]',
@@ -99,3 +99,32 @@ def test_get_template_line():
     assert coll.get_record_line({'key_1': 1, 'key_2': None}, 'c') == '@c {1,"key_2":null}'
     assert coll.get_record_line({'key_1': 1, 'key_2': None}) == '{"key_1":1,"key_2":null}'
 
+
+def test_get_record_line():
+    template_dict = {
+        'a': Template('{"key_1"}'),
+        'b': '[{"key_1"}]',
+        'c': {'key_1': None}
+    }
+    coll = JSVCollection(template_dict)
+
+    assert coll.get_template_line('a') == '#a {"key_1"}'
+    assert coll.get_template_line('b') == '#b [{"key_1"}]'
+    assert coll.get_template_line('c') == '#c {"key_1"}'
+    assert coll.get_template_line('_') == '#_ {}'
+    assert coll.get_template_line() == '#_ {}'
+
+
+def test_read_line():
+    coll = JSVCollection()
+
+    assert 'a' not in coll
+    tid, tmpl = coll.read_line('#a {"key_1"}')
+    assert 'a' in coll
+    assert tid == 'a' and tmpl == Template('{"key_1"}')
+
+    assert '_' in coll
+    assert '{}' in coll.templates
+    _, tmpl = coll.read_line('#_ [{"key_1"}]')
+    assert tmpl in coll.templates
+    assert tmpl == Template('[{"key_1"}]')
