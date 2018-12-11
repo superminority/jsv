@@ -1,6 +1,6 @@
 import json
 from collections import OrderedDict
-from enum import unique, Enum, auto
+from enum import unique, Enum
 from re import compile
 
 
@@ -259,13 +259,13 @@ def encode_template_list(kt):
 
 @unique
 class TemplateStates(Enum):
-    DONE = auto()
-    EXPECT_ARRAY_OR_OBJECT_OR_ARRAY_CLOSE = auto()
-    EXPECT_ARRAY_OR_OBJECT = auto()
-    ARRAY_NEXT_OR_CLOSE = auto()
-    OBJECT_AFTER_KEY = auto()
-    OBJECT_NEXT_OR_CLOSE = auto()
-    EXPECT_QUOTE = auto()
+    DONE = 0
+    EXPECT_ARRAY_OR_OBJECT_OR_ARRAY_CLOSE = 1
+    EXPECT_ARRAY_OR_OBJECT = 2
+    ARRAY_NEXT_OR_CLOSE = 3
+    OBJECT_AFTER_KEY = 4
+    OBJECT_NEXT_OR_CLOSE = 5
+    EXPECT_QUOTE = 6
 
 
 def parse_template_string(s):
@@ -497,9 +497,9 @@ def get_key_value_pair(char_list, ex_loc):
 
 @unique
 class StringStates(Enum):
-    STRING_NEXT_OR_CLOSE = auto()
-    STRING_ESCAPE = auto()
-    STRING_HEX = auto()
+    STRING_NEXT_OR_CLOSE = 0
+    STRING_ESCAPE = 1
+    STRING_HEX = 2
 
 
 def get_json_string(char_list, ex_loc):
