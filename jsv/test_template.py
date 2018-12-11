@@ -1,50 +1,244 @@
+from .template import Template, JSVTemplateDecodeError, JSVRecordDecodeError
 import pytest
-from .template import JSVObjectValues, JSVArrayValues, JSVObjectKeys, JSVArrayDef, JSVDecoder
 
 
-def test_record_dict():
-    rd_values = ["value_1", 2, None]
-    rd = JSVObjectValues(*rd_values)
-    for v, ex in zip(rd, rd_values):
-        assert v == ex
-    assert isinstance(rd, JSVObjectValues)
-
-
-def test_record_list():
-    rd_values = ["value_1", 2, None]
-    rd = JSVArrayValues(*rd_values)
-    for v, ex in zip(rd, rd_values):
-        assert v == ex
-    assert isinstance(rd, JSVArrayValues)
-
-
-def test_dict_expand():
-    rd_values = ["value_1", 2, None]
-    rd = JSVArrayValues(*rd_values)
-    rd_keys = ["key_1", "key_2", "key_3"]
-    rdk = JSVObjectKeys(*rd_keys)
-    dct = rdk.expand(rd)
-    for k, v in zip(rd_keys, rd_values):
-        assert dct[k] == v
-
-
-def test_array_expand():
-    expected = [
-        {"key_1": "value_1_1", "key_2": 21, "key_3": None},
-        {"key_1": "value_1_2", "key_2": 22, "key_3": ''},
-        {"key_1": "value_1_3", "key_2": 23, "key_3": 0}
-    ]
-    input = {
-        'keys': ["key_1", "key_2", "key_3"],
-        'values': JSVArrayValues(*[JSVObjectValues(*dvals.values()) for dvals in expected])
+wellformed_db = [
+    {
+        'template': '{}',
+        'valid_records': [
+            {
+                'record_string': '{"key_1":1}',
+                'object': {'key_1': 1}
+            }
+        ]
+    },
+    {
+        'template': '[{"key_1"}]',
+        'template_objects': [
+            [{'key_1': None}]
+        ],
+        'alt_templates': [
+            '[{ "key_1" \t }   \n]',
+            '[ {  "key_1" \t}\n]',
+            '[{ "key_1" : []}]',
+            '[{"key_1"},{"key_1"}]'
+        ],
+        'valid_records': [
+            {
+                'record_string': '[{1}]',
+                'object': [{'key_1': 1}]
+            },
+            {
+                'record_string': '[{1},{"two"},{3.0}]',
+                'object': [{'key_1': 1}, {'key_1': 'two'}, {'key_1': 3.0}]
+            }
+        ]
+    },
+    {
+        'template': '{"key_1":[{"key_2","key_3"}]}',
+        'template_objects': [
+            {'key_1': [{'key_2': [2,3,4], 'key_3': None}, {'key_2': 'value', 'key_3': True}]}
+        ],
+        'valid_records': [
+            {
+                'record_string': '{[{"two",3}]}',
+                'object': {'key_1': [{'key_2': "two", 'key_3': 3}]}
+            },
+            {
+                'record_string': '{[{"two",3},{4,"five"}],"key_4":{"sub_key":"value"}}',
+                'object': {'key_1': [{'key_2': "two", 'key_3': 3}, {'key_2': 4, 'key_3': "five"}],
+                           'key_4': {'sub_key': 'value'}}
+            }
+        ]
+    },
+    {
+        'template': '{"key_1","key_2","key_3","key_4"}',
+        'valid_records': [
+            {
+                'record_string': '{1,2,3,4}',
+                'object': {'key_1': 1, 'key_2': 2, 'key_3': 3, 'key_4': 4}
+            },
+            {
+                'record_string': '{1,2,3,4,"key_5":5}',
+                'object': {'key_1': 1, 'key_2': 2, 'key_3': 3, 'key_4': 4, 'key_5': 5}
+            },
+            {
+                'record_string': '{1,2,3,4,"key_5":5,"key_6":"six"}',
+                'object': {'key_1': 1, 'key_2': 2, 'key_3': 3, 'key_4': 4, 'key_5': 5, 'key_6': 'six'}
+            },
+            {
+                'record_string': '{1,,3,}',
+                'object': {'key_1': 1, 'key_3': 3}
+            },
+            {
+                'record_string': '{1,2,3,,"key_5":5}',
+                'object': {'key_1': 1, 'key_2': 2, 'key_3': 3, 'key_5': 5}
+            }
+        ],
+        'invalid_records': [
+            ('{1,2,3,,}', JSVRecordDecodeError, 'Expecting `"`: column 8'),
+            ('{1,2,3,4,', JSVRecordDecodeError, 'End of string reached unexpectedly while awaiting `"`: column 8')
+        ]
+    },
+    {
+        'template': '{"key_1":{"key_1_1"},"key_2"}'
+    },
+    {
+        'template': '[{"key_1"},]',
+        'alt_templates': [
+            '[{ "key_1": {}},,,]'
+        ],
+        'valid_records': [
+            {
+                'record_string': '[{"value_1"},3,{"key_2":"value_2"}]',
+                'object': [{'key_1': 'value_1'}, 3, {'key_2': 'value_2'}]
+            }
+        ]
+    },
+    {
+        'template': '[[{"key_1"}]]',
+        'alt_templates': [
+            '[[{"key_1"}],[{"key_1"}]]',
+            '[[{"key_1"},{"key_1"}]]',
+            '[[{"key_1"},{"key_1"}],[{"key_1"},{"key_1"}]]'
+        ]
     }
-
-    ad = JSVArrayDef(JSVObjectKeys(*input['keys']))
-    assert ad.expand(input['values']) == expected
+]
 
 
-def test_template_decode():
-    template_string = '{"key_1","key_2","key_3"}'
-    expected = JSVObjectKeys('key_1', 'key_2', 'key_3')
-    out = JSVDecoder().decode(template_string)
-    assert out == expected
+malformed_template_db = [
+    ('{"key_1"', JSVTemplateDecodeError, 'End of string reached unexpectedly: column 7')
+]
+
+
+def create_encode_record_list(db):
+    arr = []
+    for wf in db:
+        if 'valid_records' in wf:
+            template = wf['template']
+            for vr in wf['valid_records']:
+                arr.append((template, vr['object'], vr['record_string']))
+    return arr
+
+
+# Test well-formed records
+@pytest.mark.parametrize('t_str, record, expected', create_encode_record_list(wellformed_db))
+def test_encode_record(t_str, record, expected):
+    t = Template(t_str)
+    rs = t.encode(record)
+    assert rs == expected
+
+
+def create_decode_record_list(db):
+    arr = []
+    for wf in db:
+        if 'valid_records' in wf:
+            template = wf['template']
+            for vr in wf['valid_records']:
+                arr.append((template, vr['record_string'], vr['object']))
+    return arr
+
+
+@pytest.mark.parametrize('t_str, rec_str, expected', create_decode_record_list(wellformed_db))
+def test_decode_record(t_str, rec_str, expected):
+    t = Template(t_str)
+    obj = t.decode(rec_str)
+    assert obj == expected
+
+
+def create_encode_template_list(db):
+    arr = []
+    for c in db:
+        ref_template = c['template']
+        arr.append((ref_template, ref_template))
+        if 'alt_templates' in c:
+            for t_str in c['alt_templates']:
+                arr.append((t_str, ref_template))
+    return arr
+
+
+# Test well-formed templates
+@pytest.mark.parametrize('t_str, expected', create_encode_template_list(wellformed_db))
+def test_encode_template(t_str, expected):
+    ts = str(Template(t_str))
+    assert ts == expected
+
+
+def create_template_equality_list(db):
+    arr = []
+    for c in db:
+        if 'alt_templates' in c:
+            ref_template = Template(c['template'])
+            for t_str in c['alt_templates']:
+                arr.append((t_str, ref_template))
+    return arr
+
+
+@pytest.mark.parametrize('t_str, expected', create_template_equality_list(wellformed_db))
+def test_template_equality(t_str, expected):
+    t = Template(t_str)
+    assert t == expected
+
+
+def create_template_nonequality_list(db):
+    arr = []
+    for i, c in enumerate(db):
+        for d in db[i + 1:]:
+            arr.append((Template(c['template']), Template(d['template'])))
+    return arr
+
+
+@pytest.mark.parametrize('t_1, t_2', create_template_nonequality_list(wellformed_db))
+def test_template_nonequality(t_1, t_2):
+    assert t_1 != t_2
+
+
+def create_decode_template_from_object_list(db):
+    arr = []
+    for c in db:
+        if 'template_objects' in c:
+            ref_template = Template(c['template'])
+            for obj in c['template_objects']:
+                arr.append((obj, ref_template))
+    return arr
+
+
+@pytest.mark.parametrize('obj, expected', create_decode_template_from_object_list(wellformed_db))
+def test_decode_template_from_object(obj, expected):
+    t = Template(obj)
+    assert t == expected
+
+
+# Test incompatible records
+def test_encode_incompatible_record():
+    pass
+
+
+def create_decode_incompatible_record_list(db):
+    arr = []
+    for c in db:
+        if 'invalid_records' in c:
+            t = Template(c['template'])
+            for ir in c['invalid_records']:
+                arr.append((t,) + ir)
+    return arr
+
+
+@pytest.mark.parametrize('t, rec_str, ex_class, ex_msg', create_decode_incompatible_record_list(wellformed_db))
+def test_decode_incompatible_record(t, rec_str, ex_class, ex_msg):
+    try:
+        t.decode(rec_str)
+        assert False
+    except ex_class as ex:
+        assert ex_msg == str(ex)
+
+
+# Test Template __init__ exceptions
+@pytest.mark.parametrize('t_str, ex_class, ex_msg', malformed_template_db)
+def test_template_init_exceptions(t_str, ex_class, ex_msg):
+    try:
+        Template(t_str)
+        assert False
+    except ex_class as ex:
+        assert ex_msg == str(ex)
+
