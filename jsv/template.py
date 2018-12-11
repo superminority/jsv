@@ -24,6 +24,13 @@ class JSVRecordDecodeError(JSVDecodeError):
 
 
 class Template:
+    """Class for decoding and encoding json records compactly
+
+    A Template object stores the key structure for a json-compatible python object. It can then serialize or deserialize
+    any object that conforms to that key structure in a string which is similar in structure to json, but in which the
+    keys are omitted.
+    """
+
     def __hash__(self):
         return hash(str(self))
 
@@ -41,11 +48,18 @@ class Template:
         else:
             return '{}'
 
-    def __init__(self, s=''):
-        if isinstance(s, str):
-            template_str = s
-        elif isinstance(s, dict) or isinstance(s, list) or s is None:
-            template_str = get_template_str(s)
+    def __init__(self, key_source=''):
+        """Initialize a Template object
+
+        Args:
+            key_source (str or json-compatible object): if a string, this must be a valid template string. If a
+                json-compatible object, the key structure will be extracted, with keys in alphabetical order.
+
+        """
+        if isinstance(key_source, str):
+            template_str = key_source
+        elif isinstance(key_source, dict) or isinstance(key_source, list) or key_source is None:
+            template_str = get_template_str(key_source)
         else:
             raise TypeError('Expecting a string, dict or list')
         self._key_tree = parse_template_string(template_str)
