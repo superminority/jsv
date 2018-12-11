@@ -2,7 +2,6 @@ import json
 from collections import OrderedDict
 from enum import unique, Enum, auto
 from re import compile
-from copy import copy
 
 
 class JSVDecodeError(ValueError):
