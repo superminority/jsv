@@ -92,7 +92,7 @@ def encode_dict(obj, fm):
 
     entries = [''] * len(fm)
     indexes = list(fm.keys())
-    for k, v in obj.items():
+    for k, v in sorted(obj.items()):
         if k in fm:
             child_fm = fm[k]
             if isinstance(child_fm, OrderedDict):
