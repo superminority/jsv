@@ -1,6 +1,6 @@
 import pytest
-from .io import JSVCollection
-from .template import JSVTemplate
+from jsv import JSVCollection
+from jsv import JSVTemplate
 
 
 def test_basic_collection():

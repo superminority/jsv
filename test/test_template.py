@@ -1,4 +1,4 @@
-from .template import JSVTemplate, JSVTemplateDecodeError, JSVRecordDecodeError
+from jsv import JSVTemplate, JSVTemplateDecodeError, JSVRecordDecodeError
 import pytest
 
 
