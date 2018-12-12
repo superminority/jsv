@@ -8,6 +8,7 @@ JSON Separated Values (jsv)
 
 .. toctree::
    :maxdepth: 2
+   :caption: Contents:
 
    index
 

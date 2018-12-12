@@ -1,4 +1,4 @@
-from .template import Template, JSVTemplateDecodeError, JSVRecordDecodeError
+from .template import JSVTemplate, JSVTemplateDecodeError, JSVRecordDecodeError
 import pytest
 
 
@@ -124,7 +124,7 @@ def create_encode_record_list(db):
 # Test well-formed records
 @pytest.mark.parametrize('t_str, record, expected', create_encode_record_list(wellformed_db))
 def test_encode_record(t_str, record, expected):
-    t = Template(t_str)
+    t = JSVTemplate(t_str)
     rs = t.encode(record)
     assert rs == expected
 
@@ -141,7 +141,7 @@ def create_decode_record_list(db):
 
 @pytest.mark.parametrize('t_str, rec_str, expected', create_decode_record_list(wellformed_db))
 def test_decode_record(t_str, rec_str, expected):
-    t = Template(t_str)
+    t = JSVTemplate(t_str)
     obj = t.decode(rec_str)
     assert obj == expected
 
@@ -160,7 +160,7 @@ def create_encode_template_list(db):
 # Test well-formed templates
 @pytest.mark.parametrize('t_str, expected', create_encode_template_list(wellformed_db))
 def test_encode_template(t_str, expected):
-    ts = str(Template(t_str))
+    ts = str(JSVTemplate(t_str))
     assert ts == expected
 
 
@@ -168,7 +168,7 @@ def create_template_equality_list(db):
     arr = []
     for c in db:
         if 'alt_templates' in c:
-            ref_template = Template(c['template'])
+            ref_template = JSVTemplate(c['template'])
             for t_str in c['alt_templates']:
                 arr.append((t_str, ref_template))
     return arr
@@ -176,7 +176,7 @@ def create_template_equality_list(db):
 
 @pytest.mark.parametrize('t_str, expected', create_template_equality_list(wellformed_db))
 def test_template_equality(t_str, expected):
-    t = Template(t_str)
+    t = JSVTemplate(t_str)
     assert t == expected
 
 
@@ -184,7 +184,7 @@ def create_template_nonequality_list(db):
     arr = []
     for i, c in enumerate(db):
         for d in db[i + 1:]:
-            arr.append((Template(c['template']), Template(d['template'])))
+            arr.append((JSVTemplate(c['template']), JSVTemplate(d['template'])))
     return arr
 
 
@@ -197,7 +197,7 @@ def create_decode_template_from_object_list(db):
     arr = []
     for c in db:
         if 'template_objects' in c:
-            ref_template = Template(c['template'])
+            ref_template = JSVTemplate(c['template'])
             for obj in c['template_objects']:
                 arr.append((obj, ref_template))
     return arr
@@ -205,7 +205,7 @@ def create_decode_template_from_object_list(db):
 
 @pytest.mark.parametrize('obj, expected', create_decode_template_from_object_list(wellformed_db))
 def test_decode_template_from_object(obj, expected):
-    t = Template(obj)
+    t = JSVTemplate(obj)
     assert t == expected
 
 
@@ -218,7 +218,7 @@ def create_decode_incompatible_record_list(db):
     arr = []
     for c in db:
         if 'invalid_records' in c:
-            t = Template(c['template'])
+            t = JSVTemplate(c['template'])
             for ir in c['invalid_records']:
                 arr.append((t,) + ir)
     return arr
@@ -237,7 +237,7 @@ def test_decode_incompatible_record(t, rec_str, ex_class, ex_msg):
 @pytest.mark.parametrize('t_str, ex_class, ex_msg', malformed_template_db)
 def test_template_init_exceptions(t_str, ex_class, ex_msg):
     try:
-        Template(t_str)
+        JSVTemplate(t_str)
         assert False
     except ex_class as ex:
         assert ex_msg == str(ex)

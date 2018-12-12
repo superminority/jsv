@@ -4,6 +4,10 @@ from enum import unique, Enum
 from re import compile
 
 
+class JSVRecordEncodeError(ValueError):
+    """An error occurred while encoding an object into a jsv record."""
+
+
 class JSVDecodeError(ValueError):
 
     def __init__(self, msg, pos):
@@ -12,25 +16,30 @@ class JSVDecodeError(ValueError):
 
 
 class JSVTemplateDecodeError(JSVDecodeError):
-    """An error occured while decoding a :class:`.Template`"""
+    """An error occurred while decoding a str or object into a :class:`.JSVTemplate`."""
 
     def __init__(self, msg, pos):
         super().__init__(msg, pos)
 
 
 class JSVRecordDecodeError(JSVDecodeError):
-    """An error occured while decoding a record"""
+    """An error occurred while decoding a str representing a record into an object."""
 
     def __init__(self, msg, pos):
         super().__init__(msg, pos)
 
 
-class Template:
-    """Class for decoding and encoding json records compactly
+class JSVTemplate:
+    """Class for decoding and encoding json records in jsv format.
 
     A Template object stores the key structure for a json-compatible python object. It can then serialize or deserialize
     any object that conforms to that key structure in a string which is similar in structure to json, but in which the
     keys are omitted.
+
+    Args:
+        key_source (str or json-compatible object): if a string, this must be a valid template string; if not, a
+            :class:`.JSVTemplateDecodeError` will be raised. If a json-compatible object, the key structure will be
+            extracted, with keys in alphabetical order.
     """
 
     def __hash__(self):
@@ -50,14 +59,7 @@ class Template:
         else:
             return '{}'
 
-    def __init__(self, key_source=''):
-        """Initialize a Template object
-
-        Args:
-            key_source (str or json-compatible object): if a string, this must be a valid template string. If a
-                json-compatible object, the key structure will be extracted, with keys in alphabetical order.
-
-        """
+    def __init__(self, key_source='{}'):
         if isinstance(key_source, str):
             template_str = key_source
         elif isinstance(key_source, dict) or isinstance(key_source, list) or key_source is None:
@@ -71,7 +73,7 @@ class Template:
         
         Args:
             obj (json-compatible object): obj must also conform to the key structure of the Template, otherwise
-                a :class:`.JSVEncodeError` will be raised.
+                a :class:`.JSVRecordEncodeError` will be raised.
         """
         c = self._key_tree
 
@@ -87,7 +89,7 @@ class Template:
         
         Args:
             s (str): s represents a json object that has been encoded with the given template. If it does not
-                conform to the template, or is unparsable as jsv, a :class:`.JSVDecodeError` will be raised.
+                conform to the template, or is unparsable as jsv, a :class:`.JSVRecordDecodeError` will be raised.
         """
         c = self._key_tree
         if isinstance(s, str):
@@ -706,6 +708,6 @@ hex_re = compile('[0-9a-fA-F]')
 json_encode = json.JSONEncoder(separators=(',', ':')).encode
 
 if __name__ == "__main__":
-    t = Template('{"key_1","key_2","key_3","key_4"}')
+    t = JSVTemplate('{"key_1","key_2","key_3","key_4"}')
     t.decode('{1,2,3,,"key":1}')
     pass

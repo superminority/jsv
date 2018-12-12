@@ -3,20 +3,20 @@ from io import TextIOBase
 from sys import stdout
 from copy import deepcopy
 import re
-from jsv.template import Template
+from jsv.template import JSVTemplate
 
 
 DEFAULT_TEMPLATE_ID = '_'
 
 
 def get_template(t, cp=False):
-    if isinstance(t, Template):
+    if isinstance(t, JSVTemplate):
         if cp:
             return deepcopy(t)
         else:
             return t
     else:
-        return Template(t)
+        return JSVTemplate(t)
 
 
 class JSVTemplateKeys:
@@ -70,20 +70,30 @@ class JSVTemplateKeys:
 
 
 class JSVCollection:
+    """Class for using multiple templates in a single data stream.
+
+    A :class:`.JSVCollection` object is an associative array of templates, each with an id of type str. This facilitates
+    reading from and writing to a file or stream, as each line in the file or stream must be matched to a template.
+
+    Args:
+        template_dict (dict): A dictionary whose keys are ids and whose values are :class:`.JSVTemplate` objects, or
+            are values suitable for the :class:`.JSVTemplate` constructor.
+
+    """
     def __init__(self, template_dict=None):
         self._id_dict = {}
         if template_dict:
             if isinstance(template_dict, dict):
                 for k, v in template_dict.items():
-                    if isinstance(v, Template):
+                    if isinstance(v, JSVTemplate):
                         t = v
                     else:
-                        t = Template(v)
+                        t = JSVTemplate(v)
                     self._id_dict[k] = t
             else:
                 raise TypeError('parameter `template_dict` must be a dictionary')
         if DEFAULT_TEMPLATE_ID not in self._id_dict:
-            self._id_dict[DEFAULT_TEMPLATE_ID] = Template()
+            self._id_dict[DEFAULT_TEMPLATE_ID] = JSVTemplate()
         self._template_keys = JSVTemplateKeys(self._id_dict)
 
     def __getitem__(self, tid):
@@ -158,7 +168,7 @@ class JSVCollection:
         elif char_list[-1] == '#':
             char_list.pop()
             tid = get_tid(char_list)
-            tmpl = Template(''.join(reversed(char_list)))
+            tmpl = JSVTemplate(''.join(reversed(char_list)))
             self[tid] = tmpl
             return tid, tmpl
         else:
