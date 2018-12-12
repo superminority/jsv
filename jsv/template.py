@@ -12,12 +12,14 @@ class JSVDecodeError(ValueError):
 
 
 class JSVTemplateDecodeError(JSVDecodeError):
+    """An error occured while decoding a :class:`.Template`"""
 
     def __init__(self, msg, pos):
         super().__init__(msg, pos)
 
 
 class JSVRecordDecodeError(JSVDecodeError):
+    """An error occured while decoding a record"""
 
     def __init__(self, msg, pos):
         super().__init__(msg, pos)
@@ -65,6 +67,12 @@ class Template:
         self._key_tree = parse_template_string(template_str)
 
     def encode(self, obj):
+        """Encode a json-compatible object into jsv
+        
+        Args:
+            obj (json-compatible object): obj must also conform to the key structure of the Template, otherwise
+                a :class:`.JSVEncodeError` will be raised.
+        """
         c = self._key_tree
 
         if isinstance(c, OrderedDict):
@@ -75,6 +83,12 @@ class Template:
             return json_encode(obj)
 
     def decode(self, s):
+        """Decode a jsv string into a json-compatible object
+        
+        Args:
+            s (str): s represents a json object that has been encoded with the given template. If it does not
+                conform to the template, or is unparsable as jsv, a :class:`.JSVDecodeError` will be raised.
+        """
         c = self._key_tree
         if isinstance(s, str):
             char_list = list(reversed(s))
