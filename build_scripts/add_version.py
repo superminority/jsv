@@ -9,3 +9,4 @@ if len(ver_parts == 1):
     version = ver_parts[0][1:]
 else:
     release = False
+    version = ver_parts[0][1:]
