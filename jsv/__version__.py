@@ -1,0 +1,8 @@
+__title__ = 'JSV'
+__description__ = 'JSON separated values - compact representation of bulk JSON objects.'
+__url__ = 'http://jsv-io.org'
+__version__ = '0.1.1'
+__author__ = 'Alex Kovner'
+__author_email__ = 'dev@alexkovner.com'
+__license__ = 'MIT'
+__copyright__ = 'Copyright 2018 Alex Kovner'
