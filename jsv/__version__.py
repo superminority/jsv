@@ -1,4 +1,4 @@
-__title__ = 'JSV'
+__title__ = 'jsv'
 __description__ = 'JSON separated values - compact representation of bulk JSON objects.'
 __url__ = 'http://jsv-io.org'
 __version__ = '0.1.1'

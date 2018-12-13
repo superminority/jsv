@@ -1,23 +1,26 @@
 import os
-from setuptools import setup
+from setuptools import setup, find_packages
 
 here = os.path.abspath(os.path.dirname(__file__))
 about = {}
-with open(os.path.join(here, 'jsv', '__version__.py'), 'r', 'utf-8') as f:
+with open(os.path.join(here, 'jsv', '__version__.py'), 'r') as f:
     exec(f.read(), about)
 
 setup(
     name=about['__title__'],
     version=about['__version__'],
     description=about['__description__'],
+    long_description=open(os.path.join(here, 'README.rst')).read(),
     author=about['__author__'],
     author_email=about['__author_email__'],
     url=about['__url__'],
-    package_data={'': ['LICENSE', 'NOTICE'], 'requests': ['*.pem']},
+    packages=find_packages(),
     package_dir={'jsv': 'jsv'},
-    include_package_data=True,
+    include_package_data=False,
+    zip_save=True,
     python_requires=">=3.4",
     license=about['__license__'],
+    data_files=[("", ["LICENSE"])],
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Intended Audience :: Developers',
