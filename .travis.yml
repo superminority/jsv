@@ -12,7 +12,7 @@ jobs:
   include:
     - stage: deploy
       python: "3.6"
-      script: "./deploy"
+      before_deploy:
       deploy:
         provider: pypi
         user: alexkovner
