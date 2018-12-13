@@ -17,7 +17,7 @@ setup(
     packages=find_packages(),
     package_dir={'jsv': 'jsv'},
     include_package_data=False,
-    zip_save=True,
+    zip_safe=True,
     python_requires=">=3.4",
     license=about['__license__'],
     data_files=[("", ["LICENSE"])],
