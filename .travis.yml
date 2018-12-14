@@ -11,6 +11,7 @@ script: 'pytest'
 jobs:
   include:
     - stage: deploy-dev
+      if: (tag IS present) && (tag =~ /^v\d+\.\d+\.\d+\.dev\d+/)
       python: "3.6"
       before_deploy:
         - build_scripts/add_version
@@ -22,3 +23,5 @@ jobs:
           secure: "D9NYCMjhTMe34fhWIARh9iVMxAW25nkzTSTAIy8PaiX3qvSGCn4+kkF49KnDcsS19ZdFePRaA43kx2C5EGm30Dqw83xxIqsnSU2gRcg548lTWDKqZYdlf/ijNG3w7TV47CSm61E4YGylLEgt66izU5TLbx+UL9HPXegA8Mp8TfzioK5H0iJiZOdKB3xgzJKctTUhwLAjoXOTnPtpdVa7Mv/T0WUyqXx7Gfp0nH+tg6sVu59PI8CCWfagRSFBozjDBgWqjDp+EDIL0lT2S4LcrItpjCsEvGZ5ZoM5nHAZZJeMk4jvF0KXGuML+qYhZj7sj/43VZATD08TxeddEQ1bARowzNIx7cz2oC5MhICNLhkm7836qyya8zlgeiaIvQspFA8hQ3br+3zwstfb4fZtGt7ChkTQfKGma10iFKKDKvZGMzBR75Xhws+vOVe5rGldU8MsM6gCD5n6mhOwBAdEFzvJzHQaX6c5NY5/NkK1d2oLXgLdUty9AyLCXexqmIusWmt5Zea2GmGufYify2BCHQm4Wn4CX8ws/D9veOxFem/EAzgygUEUVqjFR6pnCIfLoe5mhy+u9fLAzChLUIHYeUsm/YpNQ0vu1DaoejKwXzJgizlBcudSmokWpHrA+bgjvrgEaTv6IdL9uIk+M+x5ThV9OCkQPDnggkTzGEDLigc="
         server: https://test.pypi.org/legacy/
         distributions: "sdist bdist_wheel"
+        on:
+          all_branches: true
