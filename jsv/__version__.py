@@ -2,6 +2,7 @@ __title__ = 'jsv'
 __description__ = 'A compact representation of bulk JSON objects.'
 __url__ = 'http://jsv-io.org'
 __version__ = '0.1.1'
+__commit_hash__ = None
 __author__ = 'Alex Kovner'
 __author_email__ = 'dev@alexkovner.com'
 __license__ = 'MIT'
