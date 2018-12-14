@@ -1,8 +1,8 @@
 __title__ = 'jsv'
 __description__ = 'A compact representation of bulk JSON objects.'
 __url__ = 'http://jsv-io.org'
-__version__ = '0.1.1'
-__commit_hash__ = None
+__version__ = 'v0.1.1.dev3-6-g5bfad9c'
+__commit_hash__ = '5bfad9c21dac06d890bdb3580647a9fc808bf0a9'
 __author__ = 'Alex Kovner'
 __author_email__ = 'dev@alexkovner.com'
 __license__ = 'MIT'

@@ -32,7 +32,5 @@ with open(version_path, 'w') as f:
     for var in var_order:
         print("{0} = '{1}'".format(var, about[var]), file=f)
         del about[var]
-    for var, value in about.items():
-        print("{0} = '{1}'".format(var, value), file=f)
 
-call(['git', 'add' 'jsv/__version__.py'])
+call(['git', 'add', os.path.join(root, 'jsv/__version__.py')])
