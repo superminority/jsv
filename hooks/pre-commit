@@ -7,7 +7,7 @@ git_describe = check_output(["git", "describe"]).strip().decode('utf-8')
 git_hash = check_output(['git', 'rev-parse', 'HEAD']).strip().decode('utf-8')
 
 here = os.path.abspath(os.path.dirname(__file__))
-root = os.path.abspath(os.path.join(here, os.pardir, os.pardir))
+root = os.path.abspath(os.path.join(here, os.pardir))
 about = {}
 version_path = os.path.join(root, 'jsv', '__version__.py')
 with open(version_path, 'r') as f:
