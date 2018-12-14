@@ -10,9 +10,11 @@ install:
 script: 'pytest'
 jobs:
   include:
-    - stage: deploy
-      if: (branch = master) AND (tag IS present) AND (tag =~ /^v\d+\.\d+\.\d+\.dev\d+/)
+    - stage: deploy-dev
+      if: (tag IS present) AND (tag =~ /^v\d+\.\d+\.\d+\.dev\d+/)
       python: "3.6"
+      before_deploy:
+        - build_scripts/add_version
       deploy:
         provider: pypi
         user: alexkovner
