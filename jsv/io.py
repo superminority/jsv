@@ -192,14 +192,48 @@ def get_tid(char_list):
 
 
 class JSVReader(JSVCollection):
-    def __init__(self, template_dict=None, **kwargs):
+    def __init__(self, record_file, template_dict=None, template_file=None):
         super().__init__(template_dict)
 
-    def __iter__(self):
-        pass
+        if isinstance(record_file, TextIOBase):
+            self._manage_rec_fp = False
+            self._rec_fp = record_file
+            self._rec_path = None
+        else:
+            self._manage_rec_fp = True
+            self._rec_fp = None
+            self._rec_path = fsdecode(record_file)
 
-    def get_collection(self):
-        return deepcopy(self._coll)
+        if template_file:
+            self._has_tmpl_file = True
+            if isinstance(template_file, TextIOBase):
+                self._manage_tmpl_fp = False
+                self._tmpl_fp = template_file
+                self._tmpl_path = None
+            else:
+                self._manage_tmpl_fp = True
+                self._tmpl_fp = None
+                self._tmpl_path = fsdecode(template_file)
+        else:
+            self._has_tmpl_file = False
+            self._manage_tmpl_fp = False
+            self._tmpl_path = None
+            if self._manage_rec_fp:
+                self._tmpl_fp = None
+            else:
+                self._tmpl_fp = self._rec_fp
+
+    def __iter__(self):
+        if self._manage_rec_fp:
+            if not self._rec_fp:
+                raise RuntimeError('No file pointer to a record file exists. Are you in the context manager?')
+
+        if self._manage_tmpl_fp:
+            if not self._tmpl_fp:
+                raise RuntimeError('No file pointer to a template file exists. Are you in the context manager?')
+
+        if self._has_tmpl_file:
+            pass
 
     def read(self):
         pass
