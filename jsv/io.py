@@ -134,6 +134,11 @@ class JSVCollection:
         return self._id_dict.items()
 
     @property
+    def template_lines(self):
+        for tid in self:
+            yield self.get_template_line(tid)
+
+    @property
     def templates(self):
         return self._template_keys
 
@@ -191,64 +196,143 @@ def get_tid(char_list):
     return out
 
 
-class JSVReader(JSVCollection):
-    def __init__(self, record_file, template_dict=None, template_file=None):
-        super().__init__(template_dict)
+class FileManager:
+    def __init__(self, rec_file, rec_mode=None, tmpl_file=None, tmpl_mode=None):
 
-        if isinstance(record_file, TextIOBase):
+        self._cm = False
+        if isinstance(rec_file, TextIOBase):
             self._manage_rec_fp = False
-            self._rec_fp = record_file
+            self._rec_fp = rec_file
             self._rec_path = None
+            self._rec_mode = None
         else:
+            if not rec_mode:
+                raise ValueError('rec_mode is required if using a file path for a record file')
             self._manage_rec_fp = True
             self._rec_fp = None
-            self._rec_path = fsdecode(record_file)
+            self._rec_path = fsdecode(rec_file)
+            self._rec_mode = rec_mode
 
-        if template_file:
+        if tmpl_file:
             self._has_tmpl_file = True
-            if isinstance(template_file, TextIOBase):
+            if isinstance(tmpl_file, TextIOBase):
                 self._manage_tmpl_fp = False
-                self._tmpl_fp = template_file
+                self._tmpl_fp = tmpl_file
                 self._tmpl_path = None
+                self._tmpl_mode = None
             else:
+                if not tmpl_mode:
+                    raise ValueError('tmpl_mode is required if using a file path for a template file')
                 self._manage_tmpl_fp = True
                 self._tmpl_fp = None
-                self._tmpl_path = fsdecode(template_file)
+                self._tmpl_path = fsdecode(tmpl_file)
+                self._tmpl_mode = tmpl_mode
         else:
             self._has_tmpl_file = False
             self._manage_tmpl_fp = False
             self._tmpl_path = None
+            self._tmpl_mode = None
             if self._manage_rec_fp:
                 self._tmpl_fp = None
             else:
                 self._tmpl_fp = self._rec_fp
 
-    def __iter__(self):
+    def enter(self):
+        self._cm = True
         if self._manage_rec_fp:
-            if not self._rec_fp:
-                raise RuntimeError('No file pointer to a record file exists. Are you in the context manager?')
-
+            self._rec_fp = open(self._rec_path, self._rec_mode)
+            if not self._has_tmpl_file:
+                self._tmpl_fp = self._rec_fp
         if self._manage_tmpl_fp:
-            if not self._tmpl_fp:
-                raise RuntimeError('No file pointer to a template file exists. Are you in the context manager?')
+            self._tmpl_fp = open(self._tmpl_path, self._tmpl_mode)
 
-        if self._has_tmpl_file:
-            pass
+    def close_tmpl_file(self):
+        if self._manage_tmpl_fp:
+            if self._tmpl_fp:
+                self._tmpl_fp.close()
 
-    def read(self):
-        pass
-
-
-class JSVWriter:
-    def __init__(self, jsv_collection, **kwargs):
-        self._coll = deepcopy(jsv_collection)
+    def exit(self):
+        self._cm = False
+        if self._manage_rec_fp:
+            self._rec_fp.close()
 
     @property
-    def collection(self):
-        return self._coll
+    def cm(self):
+        return self._cm
 
-    def write(self, obj):
-        pass
+    @property
+    def has_tmpl_file(self):
+        return self._has_tmpl_file
+
+    @property
+    def rec_fp(self):
+        if not self._rec_fp:
+            raise RuntimeError('No file pointer to a record file. Are you in the context manager?')
+        return self._rec_fp
+
+    @property
+    def tmpl_fp(self):
+        if not self._tmpl_fp:
+            raise RuntimeError('No file pointer to a template file. Are you in the context manager?')
+        return self._tmpl_fp
+
+
+def populate_from_tmpl_file(fp, coll):
+    for line in fp:
+        tid, tmpl = coll.read_line(line)
+        if not isinstance(tmpl, JSVTemplate):
+            raise RuntimeError('Expecting only template definitions in a template file')
+        coll[tid] = tmpl
+
+
+class JSVWriter(JSVCollection):
+    def __init__(self, record_file, record_mode='at', template_dict=None, template_file=None, template_mode='at'):
+        super().__init__(template_dict)
+        self._fm = FileManager(record_file, record_mode, template_file, template_mode)
+
+    def __enter__(self):
+        self._fm.enter()
+        for line in self.template_lines:
+            print(line, file=self._fm.tmpl_fp)
+
+    def __exit__(self):
+        self._fm.exit()
+
+    def __setitem__(self, key, value):
+        super().__setitem__(key, value)
+        if self._fm.cm:
+            print(self.get_template_line(key), file=self._fm.tmpl_fp)
+
+    def write(self, tid, obj):
+        if isinstance(obj, JSVTemplate):
+            raise ValueError('Cannot use `write` method to write a template. Template is written when added to'
+                             'JSVCollection object')
+        print(self.get_record_line(tid), file=self._fm.rec_fp)
+
+
+class JSVReader(JSVCollection):
+    def __init__(self, record_file, template_dict=None, template_file=None):
+        super().__init__(template_dict)
+        self._fm = FileManager(record_file, 'rt', template_file, 'rt')
+
+    def __enter__(self):
+        self._fm.enter()
+        if self._fm.has_tmpl_file:
+            populate_from_tmpl_file(self._fm.tmpl_fp, self)
+
+    def __exit__(self):
+        self._fm.exit()
+
+    def __iter__(self):
+        for line in self._fm.rec_fp:
+            tid, obj_or_tmpl = self.read_line(line)
+            if isinstance(obj_or_tmpl, JSVTemplate):
+                self[tid] = obj_or_tmpl
+            else:
+                yield tid, obj_or_tmpl
+
+    def read(self):
+        return [obj for _, obj in self]
 
 
 id_regex_str = '[a-zA-Z_0-9]+'
