@@ -1,6 +1,6 @@
-import pytest
-from jsv import JSVCollection
-from jsv import JSVTemplate
+from jsv import JSVCollection, JSVTemplate, JSVReader, JSVWriter
+from io import StringIO
+from unittest.mock import MagicMock, patch
 
 
 def test_basic_collection():
@@ -128,3 +128,44 @@ def test_read_line():
     _, tmpl = coll.read_line('#_ [{"key_1"}]')
     assert tmpl in coll.templates
     assert tmpl == JSVTemplate('[{"key_1"}]')
+
+
+reader_data = [
+    '#_ {"key_1"}',
+    '{"record_1"}',
+    '{"record_2"}'
+]
+read_expected = [
+    {'key_1': 'record_1'},
+    {'key_1': 'record_2'}
+]
+mock_file = MagicMock(return_value=StringIO('\n'.join(reader_data)))
+
+
+@patch('builtins.open', mock_file)
+def test_jsv_reader():
+    with JSVReader('some file') as r:
+        for (tid, rec), exp in zip(r, read_expected):
+            assert tid == '_'
+            assert rec == exp
+
+
+writer_tmpl = JSVTemplate('{"key_1"}')
+writer_recs = [
+    {'key_1': 'record_1'},
+    {'key_1': 'record_2'}
+]
+write_expected = '#_ {"key_1"}\n{"record_1"}\n{"record_2"}\n'
+mock_file = MagicMock(return_value=StringIO())
+
+
+@patch('builtins.open', mock_file)
+def test_jsv_writer():
+    with JSVWriter('some file') as w:
+        w['_'] = writer_tmpl
+        for obj in writer_recs:
+            w.write(obj)
+        w._fm.rec_fp.seek(0)
+        out = w._fm.rec_fp.read()
+        print(str(out))
+        assert out == write_expected

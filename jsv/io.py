@@ -1,6 +1,5 @@
 from os import fsdecode
 from io import TextIOBase
-from sys import stdout
 from copy import deepcopy
 import re
 from jsv.template import JSVTemplate
@@ -293,9 +292,11 @@ class JSVWriter(JSVCollection):
     def __enter__(self):
         self._fm.enter()
         for line in self.template_lines:
-            print(line, file=self._fm.tmpl_fp)
+            if line != '#_ {}':
+                print(line, file=self._fm.tmpl_fp)
+        return self
 
-    def __exit__(self):
+    def __exit__(self, t, v, tr):
         self._fm.exit()
 
     def __setitem__(self, key, value):
@@ -303,11 +304,12 @@ class JSVWriter(JSVCollection):
         if self._fm.cm:
             print(self.get_template_line(key), file=self._fm.tmpl_fp)
 
-    def write(self, tid, obj):
+    def write(self, obj, tid='_'):
         if isinstance(obj, JSVTemplate):
             raise ValueError('Cannot use `write` method to write a template. Template is written when added to'
                              'JSVCollection object')
-        print(self.get_record_line(tid), file=self._fm.rec_fp)
+        s = self.get_record_line(obj, tid)
+        print(s, file=self._fm.rec_fp)
 
 
 class JSVReader(JSVCollection):
@@ -319,8 +321,9 @@ class JSVReader(JSVCollection):
         self._fm.enter()
         if self._fm.has_tmpl_file:
             populate_from_tmpl_file(self._fm.tmpl_fp, self)
+        return self
 
-    def __exit__(self):
+    def __exit__(self, t, v, tr):
         self._fm.exit()
 
     def __iter__(self):
