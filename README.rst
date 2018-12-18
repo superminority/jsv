@@ -1,8 +1,10 @@
-json-separated-values
-=====================
-
 .. image:: https://travis-ci.org/akovner/jsv.svg?branch=master
     :target: https://travis-ci.org/akovner/jsv
+.. image:: https://coveralls.io/repos/github/akovner/jsv/badge.svg?branch=master
+    :target: https://coveralls.io/github/akovner/jsv?branch=master
+
+json-separated-values
+=====================
 
 A compact way to represent a stream of similar json objects
 
