@@ -1,6 +1,9 @@
 json-separated-values
 =====================
 
+.. image:: https://travis-ci.org/akovner/jsv.svg?branch=master
+    :target: https://travis-ci.org/akovner/jsv
+
 A compact way to represent a stream of similar json objects
 
 motivation
