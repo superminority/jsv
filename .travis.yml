@@ -38,7 +38,6 @@ jobs:
         user: alexkovner
         password:
           secure: "L7qpIz8APdG+lIs6142RcDVZDbbUUqQKMbAypTwX8Z64B2wdhGHhuIy5vSd89pvs+mP/eh/ffksEmL+O3uclELB6e/KMddHIsVuig54PPZ5Glyhw354gr3ceEO3d7hIbOohQ9uyePWKthrLU8KBgznReaOE+j2NJFm4qvBNX7jr6JdN9hfOLHsGi7JyiRzPc711aerwBzxyLzNWY+a1zS1RbNthuUQ1KsbdNY09KJ3au+G9qS+RFYqoYTmgJUG7OZ4n78faL+kFoLxJhrjPhcy7En7cZYcwlCDc26SECIkAuk8MJl38/K2jhRamwn4BPEzt7XYW9dUe30roW8dkaWnO0EV1sqXicoWUk3vgBA4Uaa/Wg8SNlv19q23DzumbEAzeqHeTHv5QsjgkVKS/6+XhX3ZfMXlwsKSFubMEbiPYIB3+CUAlwoC0c6+X0AtqjjhKM6e8V0+nKPH5YdnF4fidQtroshhDPftGM717BLHv7fATnpO5mhic4CcswsM3qtvQhF9TBAcJD9uCy4OTLlnMH8AgukQZk62fo8aCBIj38BJ6LC6GGtOlMneiR/nr74suO5+GXS0UVsFjEGJu8PJf1YKV9bWhmK1rmKkGZTOWezMNykwh+6qVaTck7F4wCKUWIieGOjIzYEhdst27W53yyY569vaNJKrtTOE+cEwU="
-        server: https://test.pypi.org/legacy/
         distributions: "sdist bdist_wheel"
         on:
           all_branches: true
