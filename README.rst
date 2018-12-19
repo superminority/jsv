@@ -11,12 +11,17 @@ JSV - JSON separated values
 
 A compact way to represent a stream of similar json objects
 
+documentation
+-------------
+
+See `<https://jsv.readthedocs.io/>`_
+
 motivation
 ----------
 
 JSON is an excellent universal represention for dictionaries, arrays and basic primitives. When representing records that are identical or nearly identical in schema, however, it is extremely verbose, as the same dictionary keys must be repeated for every record. The json lines format (which is just a sequence of json objects, each on a separate line of a file) therefore acheives great generality, but sacrifices compactness.
 
-Other formats, notably csv, are non-standardized, and can become leaky abstractions. In addition, they are usually confined to representing flat data, whereas json objects are rich with nested arrays and dictionaries.
+Other formats, notably csv, are not standardized, and can become leaky abstractions. In addition, they are usually confined to representing flat data, whereas json objects are rich with nested arrays and dictionaries.
 
 This project replaces the json lines and csv formats with a rich, flexible, and compact representation of similar json objects. It aims to stay true to the simplicity and generality of json, and can represent any json object regardless of nesting. In addition, it provides for multiple record types in a single file or stream.
 

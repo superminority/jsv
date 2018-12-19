@@ -5,6 +5,7 @@ Main Interface
 --------------
 
 .. autoclass:: jsv.JSVCollection
+   :members:
 .. autoclass:: jsv.JSVTemplate
    :members:
 
