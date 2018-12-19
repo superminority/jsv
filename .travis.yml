@@ -13,7 +13,7 @@ after_success:
 jobs:
   include:
     - stage: deploy-dev
-      if: (tag IS present) && (tag =~ /^v\d+\.\d+\.\d+\.dev\d+/)
+      if: (branch = develop) && (tag IS present) && (tag =~ /^v(\d+!)?\d+(\.\d+)*((a|b|rc)\d+)?(\.post\d+)?(\.dev\d+)$/)
       python: "3.6"
       before_deploy:
         - build_scripts/add_version
@@ -22,7 +22,22 @@ jobs:
         provider: pypi
         user: alexkovner
         password:
-          secure: "D9NYCMjhTMe34fhWIARh9iVMxAW25nkzTSTAIy8PaiX3qvSGCn4+kkF49KnDcsS19ZdFePRaA43kx2C5EGm30Dqw83xxIqsnSU2gRcg548lTWDKqZYdlf/ijNG3w7TV47CSm61E4YGylLEgt66izU5TLbx+UL9HPXegA8Mp8TfzioK5H0iJiZOdKB3xgzJKctTUhwLAjoXOTnPtpdVa7Mv/T0WUyqXx7Gfp0nH+tg6sVu59PI8CCWfagRSFBozjDBgWqjDp+EDIL0lT2S4LcrItpjCsEvGZ5ZoM5nHAZZJeMk4jvF0KXGuML+qYhZj7sj/43VZATD08TxeddEQ1bARowzNIx7cz2oC5MhICNLhkm7836qyya8zlgeiaIvQspFA8hQ3br+3zwstfb4fZtGt7ChkTQfKGma10iFKKDKvZGMzBR75Xhws+vOVe5rGldU8MsM6gCD5n6mhOwBAdEFzvJzHQaX6c5NY5/NkK1d2oLXgLdUty9AyLCXexqmIusWmt5Zea2GmGufYify2BCHQm4Wn4CX8ws/D9veOxFem/EAzgygUEUVqjFR6pnCIfLoe5mhy+u9fLAzChLUIHYeUsm/YpNQ0vu1DaoejKwXzJgizlBcudSmokWpHrA+bgjvrgEaTv6IdL9uIk+M+x5ThV9OCkQPDnggkTzGEDLigc="
+          secure: "Bg5hPRbKtzV2bxX+3BTwxNNXrDyQcDRFxi8uC3qnD0xJKA91m1Dg72uSFDVHz6Ippmdw3CaHzgEMSwDx3WDncP1ihQk/DgHCZzt6TEZsul78eakm708Zds+nH9D/VOEpYdJkqm6jKZWslgmNUXEWXXQ1lZacxQnkmyLp/cYCyslflz7mOEkZRqHenuT/mSbv6ViFMFxIlStxVLiTPRYhWn7NYjVAIMJm+q0/RC6efyoBKo7p9vbvV22IhRNyVY4K7/vZKWa40ZKAOzNFBdTPiOt4wHCCnOX0Ggy0i+SqPEvDyBoMVdhheyHbnJF744pBIR+/c4tilkcEAj6cFE+HYldjIPpJq1vnQGvQjVsa67KtK9krJ10bDlowPVCJIbu50VK4Lra42D3dT5jLaOR0nulCty6+WTcpdN60besHQOaoGwUHl6qCxa8X2mM/msgNfQtRqTHRzNii8gqDWPxqr4O2mZ23CKHzBicRucoh1QUsGILzLahW+tDLO60dd7CxI8e/bwhYI4F/edf6+28WAWo1wdnGMkezciIWoJ7SYWWNKoyjOV3Wdm1i7kkWf6BECM5scDR7cG1LdxKc2AvSpt0oH5yaQZbSPGOu6W7wdg+dn1WQIDv2Gz7rIBKJN32YkCnW/cmkdQbl5iV1xLc/x/8iEfMRNHs/Au2eOBz9eew="
+        server: https://test.pypi.org/legacy/
+        distributions: "sdist bdist_wheel"
+        on:
+          all_branches: true
+    - stage: deploy-prod
+      if: (branch = master) && (tag IS present) && (tag =~ /^v(\d+!)?\d+(\.\d+)*((a|b|rc)\d+)?(\.post\d+)?$/)
+      python: "3.6"
+      before_deploy:
+        - build_scripts/add_version
+      deploy:
+        skip_cleanup: true
+        provider: pypi
+        user: alexkovner
+        password:
+          secure: "L7qpIz8APdG+lIs6142RcDVZDbbUUqQKMbAypTwX8Z64B2wdhGHhuIy5vSd89pvs+mP/eh/ffksEmL+O3uclELB6e/KMddHIsVuig54PPZ5Glyhw354gr3ceEO3d7hIbOohQ9uyePWKthrLU8KBgznReaOE+j2NJFm4qvBNX7jr6JdN9hfOLHsGi7JyiRzPc711aerwBzxyLzNWY+a1zS1RbNthuUQ1KsbdNY09KJ3au+G9qS+RFYqoYTmgJUG7OZ4n78faL+kFoLxJhrjPhcy7En7cZYcwlCDc26SECIkAuk8MJl38/K2jhRamwn4BPEzt7XYW9dUe30roW8dkaWnO0EV1sqXicoWUk3vgBA4Uaa/Wg8SNlv19q23DzumbEAzeqHeTHv5QsjgkVKS/6+XhX3ZfMXlwsKSFubMEbiPYIB3+CUAlwoC0c6+X0AtqjjhKM6e8V0+nKPH5YdnF4fidQtroshhDPftGM717BLHv7fATnpO5mhic4CcswsM3qtvQhF9TBAcJD9uCy4OTLlnMH8AgukQZk62fo8aCBIj38BJ6LC6GGtOlMneiR/nr74suO5+GXS0UVsFjEGJu8PJf1YKV9bWhmK1rmKkGZTOWezMNykwh+6qVaTck7F4wCKUWIieGOjIzYEhdst27W53yyY569vaNJKrtTOE+cEwU="
         server: https://test.pypi.org/legacy/
         distributions: "sdist bdist_wheel"
         on:
