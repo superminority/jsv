@@ -145,7 +145,7 @@ mock_file = MagicMock(return_value=StringIO('\n'.join(reader_data)))
 @patch('builtins.open', mock_file)
 def test_jsv_reader():
     with JSVReader('some file') as r:
-        for (tid, rec), exp in zip(r, read_expected):
+        for (tid, rec), exp in zip(r.items(), read_expected):
             assert tid == '_'
             assert rec == exp
 

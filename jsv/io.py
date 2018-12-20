@@ -69,14 +69,14 @@ class JSVTemplateKeys:
 
 
 class JSVCollection:
-    """Class for using multiple templates in a single data stream.
+    """Use multiple templates in a single data stream.
 
     A :class:`.JSVCollection` object is an associative array of templates, each with an id of type str. This facilitates
     reading from and writing to a file or stream, as each line in the file or stream must be matched to a template.
 
     Args:
-        template_dict (dict): A dictionary whose keys are ids and whose values are :class:`.JSVTemplate` objects, or
-            are values suitable for the :class:`.JSVTemplate` constructor.
+        template_dict (dict): A dictionary whose keys are template ids and whose values are :class:`.JSVTemplate`
+            objects, or are values suitable for the :class:`.JSVTemplate` constructor.
 
     """
     def __init__(self, template_dict=None):
@@ -130,18 +130,57 @@ class JSVCollection:
         return len(self._id_dict)
 
     def items(self):
+        """Iterator that yields the tuple (tid, template)."""
         return self._id_dict.items()
 
-    @property
     def template_lines(self):
+        """Iterator that yields the string defining a template in a ``.jsv`` file. For example:
+
+            >>> coll = jsv.JSVCollection()
+            >>> coll['template_1'] = '{"key_1"}'
+            >>> for s in coll.template_lines():
+            ...     print(s)
+            ...
+            #_ {}
+            #template_1 {"key_1"}
+
+        See :meth:`get_template_line`
+        """
         for tid in self:
             yield self.get_template_line(tid)
 
     @property
     def templates(self):
+        """Object that provides an iterator over the templates in the collection. Allows reverse lookup of
+        template id from a given template. For example:
+
+            >>> coll = jsv.JSVCollection()
+            >>> coll['template_1'] = '{"key_1"}'
+            >>> coll['template_2'] = '{"key_2"}'
+            >>> coll.templates['{"key_1"}']
+            'template_1'
+
+        Also allows testing for containment with the ``in`` operator:
+
+            >>> '{"key_1"}' in coll.templates
+            True
+            >>> '{"key_5"}' in coll.templates
+            False
+        """
         return self._template_keys
 
     def get_template_line(self, tid=DEFAULT_TEMPLATE_ID):
+        """
+        Return a string defining a template in a ``.jsv`` file. For example:
+
+            >>> coll = jsv.JSVCollection()
+            >>> coll['template_1'] = '{"key_1"}'
+            >>> coll.get_template_line('template_1')
+            '#template_1 {"key_1"}'
+
+        Args:
+            tid (str): The id of the template.
+        """
         if not isinstance(tid, str):
             raise TypeError('argument `key` must be a string')
 
@@ -151,6 +190,18 @@ class JSVCollection:
         return '#{0} {1}'.format(tid, str(self._id_dict[tid]))
 
     def get_record_line(self, obj, tid=DEFAULT_TEMPLATE_ID):
+        """
+        Returns a string defining a record in a ``.jsv`` file. For example:
+
+            >>> coll = jsv.JSVCollection()
+            >>> coll['template_1'] = '{"key_1"}'
+            >>> coll.get_record_line({'key_1': 'value_1'}, 'template_1')
+            '@template_1 {"value_1"}'
+
+        Args:
+            obj (json-compatible object): The object to be encoded.
+            tid (str): The id of the template.
+        """
         if not isinstance(tid, str):
             raise TypeError('argument `key` must be a string')
 
@@ -162,12 +213,27 @@ class JSVCollection:
         else:
             return '@{0} {1}'.format(tid, self._id_dict[tid].encode(obj))
 
-    def read_line(self, s):
-        char_list = list(reversed(s))
+    def read_line(self, line):
+        """Used to read a single line from a ``.jsv`` file. For example:
+
+            >>> coll = jsv.JSVCollection()
+            >>> tid, tmpl = coll.read_line('#template_1 {"key_1"}')
+            >>> coll[tid] = tmpl
+            >>> coll.read_line('@template_1 {"value_1"}')
+            ('template_1', {'key_1': 'value_1'})
+
+        Args:
+            line (str): String to be read. The string should be in the format used by a ``.jsv`` file. It can be either a
+                record or a template.
+
+        Returns:
+            tuple: (tid, template_or_record)
+        """
+        char_list = list(reversed(line))
         if char_list[-1] == '@':
             char_list.pop()
             tid = get_tid(char_list)
-            obj = self[tid].decode(s)
+            obj = self[tid].decode(char_list)
             return tid, obj
         elif char_list[-1] == '#':
             char_list.pop()
@@ -264,6 +330,10 @@ class FileManager:
         return self._has_tmpl_file
 
     @property
+    def manage_tmpl_fp(self):
+        return self._manage_tmpl_fp
+
+    @property
     def rec_fp(self):
         if not self._rec_fp:
             raise RuntimeError('No file pointer to a record file. Are you in the context manager?')
@@ -285,13 +355,33 @@ def populate_from_tmpl_file(fp, coll):
 
 
 class JSVWriter(JSVCollection):
+    """Context manager for writing data to files in JSV format.
+
+    This is the main class for writing JSV records to a file or stream. If either ``record_file`` or ``template_file``
+    is a string, then it must be used as a context manager. Otherwise, the context manager does nothing with the file
+    pointers, and the object can be used as a context manager or not.
+
+    As :class:`JSVWriter` inherits from :class:`JSVCollection`, it maintains any templates assigned to it. In addition,
+    templates are immediately written to the file or stream when added.
+
+    Args:
+        record_file (filepath or :class:`io.TextIOBase`): Either a file path, or a file pointer to which records should
+            be written. If ``template_file`` is not given, templates will be written here as well.
+        record_mode (str): file mode for the record file. Only used if ``record_file`` is a string.
+        template_dict (dict): Dictionary of templates. See :class:`JSVCollection`.
+        template_file (filepath or :class:`io.TextIOBase`): Either a file path, or a file pointer to which templates
+            should be written. if present, templates and records will be written to different files. By convention,
+            records should use the file extension ``.jsvr`` and templates should use file extension ``.jsvt``.
+        template_mode (str): file mode for the template file. Only used if ``template_file`` is a string.
+
+    """
     def __init__(self, record_file, record_mode='at', template_dict=None, template_file=None, template_mode='at'):
         super().__init__(template_dict)
         self._fm = FileManager(record_file, record_mode, template_file, template_mode)
 
     def __enter__(self):
         self._fm.enter()
-        for line in self.template_lines:
+        for line in self.template_lines():
             if line != '#_ {}':
                 print(line, file=self._fm.tmpl_fp)
         return self
@@ -305,6 +395,12 @@ class JSVWriter(JSVCollection):
             print(self.get_template_line(key), file=self._fm.tmpl_fp)
 
     def write(self, obj, tid='_'):
+        """Writes an object to a file or stream in JSV format
+
+        Args:
+            obj (json-compatible object): Object to be written.
+            tid (str): Id of the template used to encode ``obj``.
+        """
         if isinstance(obj, JSVTemplate):
             raise ValueError('Cannot use `write` method to write a template. Template is written when added to'
                              'JSVCollection object')
@@ -313,13 +409,34 @@ class JSVWriter(JSVCollection):
 
 
 class JSVReader(JSVCollection):
+    """Context manager for reading data from files in JSV format.
+
+    This is the main class for reading JSV records from a file or stream. If either ``record_file`` or ``template_file``
+    is a string, then it must be used as a context manager. Otherwise, the context manager does nothing with the file
+    pointers, and the object can be used as a context manager or not.
+
+    All of the templates used by a :class:`JSVReader` instance must come from either ``record_file`` or
+    ``template_file``. If it is present, ``template_file`` is read during initialization (if ``template_file`` is a file
+    pointer) or when entering the context manager (if ``template_file`` is a file path).
+
+    Args:
+        record_file (filepath or :class:`io.TextIOBase`): Either a file path, or a file pointer from which records
+            should be read. Templates, if present, will also be read.
+        template_dict (dict): Dictionary of templates. See :class:`JSVCollection`.
+        template_file (filepath or :class:`TextIOBase`): Either a file path, or a file pointer to which templates should
+            be written. if present, templates and records will be written to different files. By convention, records
+            should use the file extension ``.jsvr`` and templates should use file extension ``.jsvt``.
+
+    """
     def __init__(self, record_file, template_dict=None, template_file=None):
         super().__init__(template_dict)
         self._fm = FileManager(record_file, 'rt', template_file, 'rt')
+        if self._fm.has_tmpl_file and not self._fm.manage_tmpl_fp:
+            populate_from_tmpl_file(self._fm.tmpl_fp, self)
 
     def __enter__(self):
         self._fm.enter()
-        if self._fm.has_tmpl_file:
+        if self._fm.has_tmpl_file and self._fm.manage_tmpl_fp:
             populate_from_tmpl_file(self._fm.tmpl_fp, self)
         return self
 
@@ -327,15 +444,31 @@ class JSVReader(JSVCollection):
         self._fm.exit()
 
     def __iter__(self):
+        """Iterator magic method for the reader object.
+
+        Returns:
+             a json-compatible object
+
+        """
+        for line in self._fm.rec_fp:
+            tid, obj_or_tmpl = self.read_line(line)
+            if isinstance(obj_or_tmpl, JSVTemplate):
+                self[tid] = obj_or_tmpl
+            else:
+                yield obj_or_tmpl
+
+    def items(self):
+        """Iterator over both the values and the template ids for each record
+
+        Returns:
+             (tid, object) where ``tid`` is the id of the template used, and ``object`` is a json-compatible object.
+        """
         for line in self._fm.rec_fp:
             tid, obj_or_tmpl = self.read_line(line)
             if isinstance(obj_or_tmpl, JSVTemplate):
                 self[tid] = obj_or_tmpl
             else:
                 yield tid, obj_or_tmpl
-
-    def read(self):
-        return [obj for _, obj in self]
 
 
 id_regex_str = '[a-zA-Z_0-9]+'
