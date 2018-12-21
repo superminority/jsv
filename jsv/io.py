@@ -8,12 +8,9 @@ from jsv.template import JSVTemplate
 DEFAULT_TEMPLATE_ID = '_'
 
 
-def get_template(t, cp=False):
+def get_template(t):
     if isinstance(t, JSVTemplate):
-        if cp:
-            return deepcopy(t)
-        else:
-            return t
+        return t
     else:
         return JSVTemplate(t)
 
@@ -35,9 +32,6 @@ class JSVTemplateKeys:
                 return tid
         else:
             raise KeyError(str(t))
-
-    def __iter__(self):
-        return iter(self._template_dict)
 
     def __contains__(self, tmpl):
         return get_template(tmpl) in self._template_dict
@@ -151,8 +145,7 @@ class JSVCollection:
 
     @property
     def templates(self):
-        """Object that provides an iterator over the templates in the collection. Allows reverse lookup of
-        template id from a given template. For example:
+        """Object that allows reverse lookup of template id from a given template. For example:
 
             >>> coll = jsv.JSVCollection()
             >>> coll['template_1'] = '{"key_1"}'
