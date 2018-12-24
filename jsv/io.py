@@ -267,7 +267,6 @@ class FileManager:
                 self._tmpl_fp = tmpl_file
                 self._tmpl_path = None
                 self._tmpl_mode = None
-                self._tmpl_open = True
             else:
                 self._manage_tmpl_fp = True
                 self._tmpl_fp = None
@@ -282,11 +281,8 @@ class FileManager:
                 self._tmpl_fp = None
             else:
                 self._tmpl_fp = self._rec_fp
-        self._tmpl_open = ((self._has_tmpl_file and not self._manage_tmpl_fp) or
-                           (not self._has_tmpl_file and not self._manage_rec_fp))
 
     def enter(self):
-        self._tmpl_open = True
         if self._manage_rec_fp:
             self._rec_fp = open(self._rec_path, self._rec_mode)
             if not self._has_tmpl_file:
@@ -294,19 +290,11 @@ class FileManager:
         if self._manage_tmpl_fp:
             self._tmpl_fp = open(self._tmpl_path, self._tmpl_mode)
 
-    def close_tmpl_file(self):
-        if self._manage_tmpl_fp:
-            if self._tmpl_fp:
-                self._tmpl_fp.close()
-
     def exit(self):
-        self._tmpl_open = False
         if self._manage_rec_fp:
             self._rec_fp.close()
-
-    @property
-    def tmpl_open(self):
-        return self._tmpl_open
+        if self._manage_tmpl_fp:
+            self._tmpl_fp.close()
 
     @property
     def has_tmpl_file(self):
@@ -360,27 +348,31 @@ class JSVWriter(JSVCollection):
     """
     def __init__(self, record_file, record_mode='at', template_dict=None, template_file=None, template_mode='at'):
         super().__init__(template_dict)
-        self._fm = FileManager(record_file, record_mode, template_file, template_mode)
-        if not self._fm.manage_tmpl_fp:
+        self.files = FileManager(record_file, record_mode, template_file, template_mode)
+        if not self.files.manage_tmpl_fp:
             for line in self.template_lines():
                 if line != '#_ {}':
-                    print(line, file=self._fm.tmpl_fp)
+                    print(line, file=self.files.tmpl_fp)
 
     def __enter__(self):
-        self._fm.enter()
-        if self._fm.manage_tmpl_fp:
+        self.files.enter()
+        if self.files.manage_tmpl_fp:
             for line in self.template_lines():
                 if line != '#_ {}':
-                    print(line, file=self._fm.tmpl_fp)
+                    print(line, file=self.files.tmpl_fp)
         return self
 
     def __exit__(self, t, v, tr):
-        self._fm.exit()
+        self.files.exit()
 
     def __setitem__(self, key, value):
         super().__setitem__(key, value)
-        if self._fm.tmpl_open:
-            print(self.get_template_line(key), file=self._fm.tmpl_fp)
+        try:
+            fp = self.files.tmpl_fp
+        except RuntimeError:
+            fp = None
+        if fp:
+            print(self.get_template_line(key), file=fp)
 
     def write(self, obj, tid='_'):
         """Writes an object to a file or stream in JSV format
@@ -393,7 +385,7 @@ class JSVWriter(JSVCollection):
             raise ValueError('Cannot use `write` method to write a template. Template is written when added to'
                              'JSVCollection object')
         s = self.get_record_line(obj, tid)
-        print(s, file=self._fm.rec_fp)
+        print(s, file=self.files.rec_fp)
 
 
 class JSVReader(JSVCollection):

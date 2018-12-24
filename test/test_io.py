@@ -195,6 +195,7 @@ def test_read_line():
     except ValueError as ex:
         assert str(ex) == 'Template id must not be the empty string'
 
+
 reader_data = [
     '#_ {"key_1"}',
     '{"record_1"}',
@@ -225,7 +226,15 @@ write_expected = {
     'template': '#_ {"key_1"}\n',
     'record': '{"record_1"}\n{"record_2"}\n'
 }
-mock_file = MagicMock(return_value=StringIO())
+
+
+class StringIOIter:
+    def __iter__(self):
+        while True:
+            yield StringIO()
+
+
+mock_file = MagicMock(side_effect=StringIOIter())
 
 
 @patch('builtins.open', mock_file)
@@ -234,9 +243,18 @@ def test_jsv_writer():
         w['_'] = writer_tmpl
         for obj in writer_recs:
             w.write(obj)
-        w._fm.rec_fp.seek(0)
-        out = w._fm.rec_fp.read()
+        w.files.rec_fp.seek(0)
+        out = w.files.rec_fp.read()
         assert out == write_expected['combined']
+    with JSVWriter('/some/other/file', 'at', {'_': writer_tmpl}, '/template/file', 'at') as w:
+        for obj in writer_recs:
+            w.write(obj)
+        w.files.rec_fp.seek(0)
+        out = w.files.rec_fp.read()
+        assert out == write_expected['record']
+        w.files.tmpl_fp.seek(0)
+        out = w.files.tmpl_fp.read()
+        assert out == write_expected['template']
     with StringIO() as f:
         w = JSVWriter(f)
         w['_'] = writer_tmpl
