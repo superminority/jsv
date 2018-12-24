@@ -411,9 +411,9 @@ class JSVReader(JSVCollection):
         record_file (filepath or :class:`io.TextIOBase`): Either a file path, or a file pointer from which records
             should be read. Templates, if present, will also be read.
         template_dict (dict): Dictionary of templates. See :class:`JSVCollection`.
-        template_file (filepath or :class:`TextIOBase`): Either a file path, or a file pointer to which templates should
-            be written. if present, templates and records will be written to different files. By convention, records
-            should use the file extension ``.jsvr`` and templates should use file extension ``.jsvt``.
+        template_file (filepath or :class:`io.TextIOBase`): Either a file path, or a file pointer to which templates
+            should be written. if present, templates and records will be written to different files. By convention,
+            records should use the file extension ``.jsvr`` and templates should use file extension ``.jsvt``.
 
     """
     def __init__(self, record_file, template_dict=None, template_file=None):

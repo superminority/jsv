@@ -124,7 +124,7 @@ def test_get_record_line():
     assert coll.get_record_line({'key_1': 1, 'key_2': None}, 'a') == '@a {1,"key_2":null}'
     assert coll.get_record_line([{'key_1': 1}, {'key_1': 2}], 'b') == '@b [{1},{2}]'
     assert coll.get_record_line({'key_1': 1, 'key_2': None}, 'c') == '@c {1,"key_2":null}'
-    assert coll.get_record_line({'key_1': 1, 'key_2': None}) == '{"key_1":1,"key_2":null}'
+    assert coll.get_record_line({'key_1': 1, 'key_2': None}) in {'{"key_1":1,"key_2":null}', '{"key_2":null,"key_1":1}'}
 
     try:
         coll.get_record_line({'key_1': 1, 'key_2': None}, 3)
