@@ -71,6 +71,20 @@ def test_basic_collection():
     del coll['c']
     assert '{"key_1"}' not in coll.templates
 
+    # Check key error on delete of non-existent tid
+    try:
+        del coll['asdfasdf']
+        assert False
+    except KeyError as ex:
+        assert str(ex) == "'asdfasdf'"
+
+    # Check cannot delete default template
+    try:
+        del coll['_']
+        assert False
+    except ValueError as ex:
+        assert str(ex) == 'Cannot delete the default template'
+
     # Check the key errors for ids
     try:
         coll['asdf']
@@ -83,6 +97,19 @@ def test_basic_collection():
         coll.templates['{"asdf"}']
         assert False
     except KeyError:
+        assert True
+
+    try:
+        tid = '87sfa&&3773'
+        coll[tid] = '{"key_1"}'
+        assert False
+    except ValueError as ex:
+        assert str(ex) == 'Template id `{0}` is not valid. It must match `[a-zA-Z_0-9]+`'.format(tid)
+
+    try:
+        _ = JSVCollection('sdf')
+        assert False
+    except TypeError:
         assert True
 
 
@@ -99,8 +126,18 @@ def test_get_record_line():
     assert coll.get_record_line({'key_1': 1, 'key_2': None}, 'c') == '@c {1,"key_2":null}'
     assert coll.get_record_line({'key_1': 1, 'key_2': None}) == '{"key_1":1,"key_2":null}'
 
+    try:
+        coll.get_record_line({'key_1': 1, 'key_2': None}, 3)
+    except TypeError as ex:
+        assert str(ex) == 'argument `key` must be a string'
 
-def test_get_record_line():
+    try:
+        coll.get_record_line({'key_1': 1, 'key_2': None}, 'sdf')
+    except KeyError as ex:
+        assert str(ex) == "'sdf'"
+
+
+def test_get_template_line():
     template_dict = {
         'a': JSVTemplate('{"key_1"}'),
         'b': '[{"key_1"}]',
@@ -113,6 +150,19 @@ def test_get_record_line():
     assert coll.get_template_line('c') == '#c {"key_1"}'
     assert coll.get_template_line('_') == '#_ {}'
     assert coll.get_template_line() == '#_ {}'
+
+    # try passing key that is not a string
+    try:
+        coll.get_template_line(3)
+        assert False
+    except TypeError as ex:
+        assert str(ex) == 'argument `key` must be a string'
+
+    try:
+        coll.get_template_line('dfjkjdfk')
+        assert False
+    except KeyError as ex:
+        assert str(ex) == "'dfjkjdfk'"
 
 
 def test_read_line():
@@ -129,6 +179,21 @@ def test_read_line():
     assert tmpl in coll.templates
     assert tmpl == JSVTemplate('[{"key_1"}]')
 
+    tid, rec = coll.read_line('@a {"value"}')
+    assert tid == 'a'
+    assert rec == {'key_1': 'value'}
+
+    try:
+        _, _ = coll.read_line('@* {"value"}')
+        assert False
+    except ValueError as ex:
+        assert str(ex) == 'Template id must match regex `[a-zA-Z_0-9]+`'
+
+    try:
+        _, _ = coll.read_line('@ {"value"}')
+        assert False
+    except ValueError as ex:
+        assert str(ex) == 'Template id must not be the empty string'
 
 reader_data = [
     '#_ {"key_1"}',
@@ -155,7 +220,11 @@ writer_recs = [
     {'key_1': 'record_1'},
     {'key_1': 'record_2'}
 ]
-write_expected = '#_ {"key_1"}\n{"record_1"}\n{"record_2"}\n'
+write_expected = {
+    'combined': '#_ {"key_1"}\n{"record_1"}\n{"record_2"}\n',
+    'template': '#_ {"key_1"}\n',
+    'record': '{"record_1"}\n{"record_2"}\n'
+}
 mock_file = MagicMock(return_value=StringIO())
 
 
@@ -167,5 +236,25 @@ def test_jsv_writer():
             w.write(obj)
         w._fm.rec_fp.seek(0)
         out = w._fm.rec_fp.read()
-        print(str(out))
-        assert out == write_expected
+        assert out == write_expected['combined']
+    with StringIO() as f:
+        w = JSVWriter(f)
+        w['_'] = writer_tmpl
+        for obj in writer_recs:
+            w.write(obj)
+        f.seek(0)
+        out = f.read()
+        assert out == write_expected['combined']
+    with StringIO() as rec_file, StringIO() as tmpl_file:
+        w = JSVWriter(rec_file, 'at', {'_': writer_tmpl}, tmpl_file)
+        for obj in writer_recs:
+            w.write(obj)
+        rec_file.seek(0)
+        out = rec_file.read()
+        assert out == write_expected['record']
+        tmpl_file.seek(0)
+        out = tmpl_file.read()
+        assert out == write_expected['template']
+
+
+

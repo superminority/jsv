@@ -38,8 +38,6 @@ class JSVTemplateKeys:
 
     def _add(self, tmpl, tid):
         td = self._template_dict
-        if not validate_id(tid):
-            raise ValueError('template key must match regex `{}`'.format(id_regex_str))
 
         t = get_template(tmpl)
         if t in td:
@@ -50,16 +48,10 @@ class JSVTemplateKeys:
     def _remove(self, tmpl, tid):
         t = get_template(tmpl)
         td = self._template_dict
-        if t in td:
-            if tid in td[t]:
-                if len(td[t]) > 1:
-                    td[t].remove(tid)
-                else:
-                    del td[t]
-            else:
-                raise KeyError(tid)
+        if len(td[t]) > 1:
+            td[t].remove(tid)
         else:
-            raise KeyError(str(tmpl))
+            del td[t]
 
 
 class JSVCollection:
@@ -97,7 +89,7 @@ class JSVCollection:
 
     def __setitem__(self, tid, tmpl):
         if not validate_id(tid):
-            raise ValueError('`{}` is not a valid')
+            raise ValueError('Template id `{0}` is not valid. It must match `{1}`'.format(tid, id_regex_str))
         t = get_template(tmpl)
 
         if tid in self._id_dict:
@@ -112,7 +104,7 @@ class JSVCollection:
             self._template_keys._remove(self._id_dict[tid], tid)
             del self._id_dict[tid]
         else:
-            KeyError(tid)
+            raise KeyError(tid)
 
     def __iter__(self):
         return iter(self._id_dict)
@@ -216,8 +208,8 @@ class JSVCollection:
             ('template_1', {'key_1': 'value_1'})
 
         Args:
-            line (str): String to be read. The string should be in the format used by a ``.jsv`` file. It can be either a
-                record or a template.
+            line (str): String to be read. The string should be in the format used by a ``.jsv`` file. It can be either
+                a record or a template.
 
         Returns:
             tuple: (tid, template_or_record)
@@ -255,17 +247,14 @@ def get_tid(char_list):
 
 
 class FileManager:
-    def __init__(self, rec_file, rec_mode=None, tmpl_file=None, tmpl_mode=None):
+    def __init__(self, rec_file, rec_mode, tmpl_file=None, tmpl_mode=None):
 
-        self._cm = False
         if isinstance(rec_file, TextIOBase):
             self._manage_rec_fp = False
             self._rec_fp = rec_file
             self._rec_path = None
             self._rec_mode = None
         else:
-            if not rec_mode:
-                raise ValueError('rec_mode is required if using a file path for a record file')
             self._manage_rec_fp = True
             self._rec_fp = None
             self._rec_path = fsdecode(rec_file)
@@ -278,9 +267,8 @@ class FileManager:
                 self._tmpl_fp = tmpl_file
                 self._tmpl_path = None
                 self._tmpl_mode = None
+                self._tmpl_open = True
             else:
-                if not tmpl_mode:
-                    raise ValueError('tmpl_mode is required if using a file path for a template file')
                 self._manage_tmpl_fp = True
                 self._tmpl_fp = None
                 self._tmpl_path = fsdecode(tmpl_file)
@@ -294,9 +282,11 @@ class FileManager:
                 self._tmpl_fp = None
             else:
                 self._tmpl_fp = self._rec_fp
+        self._tmpl_open = ((self._has_tmpl_file and not self._manage_tmpl_fp) or
+                           (not self._has_tmpl_file and not self._manage_rec_fp))
 
     def enter(self):
-        self._cm = True
+        self._tmpl_open = True
         if self._manage_rec_fp:
             self._rec_fp = open(self._rec_path, self._rec_mode)
             if not self._has_tmpl_file:
@@ -310,13 +300,13 @@ class FileManager:
                 self._tmpl_fp.close()
 
     def exit(self):
-        self._cm = False
+        self._tmpl_open = False
         if self._manage_rec_fp:
             self._rec_fp.close()
 
     @property
-    def cm(self):
-        return self._cm
+    def tmpl_open(self):
+        return self._tmpl_open
 
     @property
     def has_tmpl_file(self):
@@ -371,12 +361,17 @@ class JSVWriter(JSVCollection):
     def __init__(self, record_file, record_mode='at', template_dict=None, template_file=None, template_mode='at'):
         super().__init__(template_dict)
         self._fm = FileManager(record_file, record_mode, template_file, template_mode)
+        if not self._fm.manage_tmpl_fp:
+            for line in self.template_lines():
+                if line != '#_ {}':
+                    print(line, file=self._fm.tmpl_fp)
 
     def __enter__(self):
         self._fm.enter()
-        for line in self.template_lines():
-            if line != '#_ {}':
-                print(line, file=self._fm.tmpl_fp)
+        if self._fm.manage_tmpl_fp:
+            for line in self.template_lines():
+                if line != '#_ {}':
+                    print(line, file=self._fm.tmpl_fp)
         return self
 
     def __exit__(self, t, v, tr):
@@ -384,7 +379,7 @@ class JSVWriter(JSVCollection):
 
     def __setitem__(self, key, value):
         super().__setitem__(key, value)
-        if self._fm.cm:
+        if self._fm.tmpl_open:
             print(self.get_template_line(key), file=self._fm.tmpl_fp)
 
     def write(self, obj, tid='_'):
