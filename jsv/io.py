@@ -301,6 +301,10 @@ class FileManager:
         return self._has_tmpl_file
 
     @property
+    def manage_rec_fp(self):
+        return self._manage_rec_fp
+
+    @property
     def manage_tmpl_fp(self):
         return self._manage_tmpl_fp
 
@@ -356,10 +360,16 @@ class JSVWriter(JSVCollection):
 
     def __enter__(self):
         self.files.enter()
-        if self.files.manage_tmpl_fp:
-            for line in self.template_lines():
-                if line != '#_ {}':
-                    print(line, file=self.files.tmpl_fp)
+        if self.files.has_tmpl_file:
+            if self.files.manage_tmpl_fp:
+                for line in self.template_lines():
+                    if line != '#_ {}':
+                        print(line, file=self.files.tmpl_fp)
+        else:
+            if self.files.manage_rec_fp:
+                for line in self.template_lines():
+                    if line != '#_ {}':
+                        print(line, file=self.files.rec_fp)
         return self
 
     def __exit__(self, t, v, tr):
@@ -368,7 +378,10 @@ class JSVWriter(JSVCollection):
     def __setitem__(self, key, value):
         super().__setitem__(key, value)
         try:
-            fp = self.files.tmpl_fp
+            if self.files.has_tmpl_file:
+                fp = self.files.tmpl_fp
+            else:
+                fp = self.files.rec_fp
         except RuntimeError:
             fp = None
         if fp:
@@ -408,8 +421,8 @@ class JSVReader(JSVCollection):
             records should use the file extension ``.jsvr`` and templates should use file extension ``.jsvt``.
 
     """
-    def __init__(self, record_file, template_dict=None, template_file=None):
-        super().__init__(template_dict)
+    def __init__(self, record_file, template_file=None):
+        super().__init__()
         self._fm = FileManager(record_file, 'rt', template_file, 'rt')
         if self._fm.has_tmpl_file and not self._fm.manage_tmpl_fp:
             populate_from_tmpl_file(self._fm.tmpl_fp, self)

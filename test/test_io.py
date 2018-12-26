@@ -217,14 +217,11 @@ def test_jsv_reader():
             assert rec == exp
 
 
+# Categories:
+#           'record_input_type': ['file_name', 'file_pointer'],
+#           'template_input_type': ['file_name', 'file_pointer', 'record_file']
 reader_data = [
     {
-        'record_input_type': ['file_name', 'file_pointer'],
-        'template_input_type': ['file_name', 'file_pointer', 'record_file']
-    },
-    {
-        'record_input_type': 'file_name',
-        'template_input_type': 'record_file',
         'expected': [
             {'key_1': 'record_1'},
             {'key_1': 'record_2'}
@@ -238,15 +235,96 @@ reader_data = [
 ]
 
 
-@mark.parametrize('test_data', [x for x in reader_data if x['record_input_type'] == 'file_name'
-                                and x['template_input_type'] == 'record_file'])
-def test_reader_with_record_filename(test_data):
-    with patch('builtins.open', MagicMock(return_value=StringIO('\n'.join(test_data['input'])))):
-        with JSVReader('/some/file') as r:
-            for (tid, rec), exp in zip(r.items(), test_data['expected']):
+def get_reader_input(input_arr, ret_type=None):
+    if ret_type == 'record':
+        return '\n'.join([x for x in input_arr if x[0] != '#'])
+    elif ret_type == 'template':
+        return '\n'.join([x for x in input_arr if x[0] == '#'])
+    else:
+        return '\n'.join([x for x in input_arr])
+
+
+def test_bad_template_file():
+    rec_fp = StringIO()
+    tmpl_fp = StringIO('\n'.join([
+        '#_ {"key_1"}',
+        '{"record_1"}',
+        '{"record_2"}'
+    ]))
+    try:
+        JSVReader(rec_fp, tmpl_fp)
+        assert False
+    except RuntimeError as ex:
+        assert str(ex) == 'Expecting only template definitions in a template file'
+
+
+@mark.parametrize('record_str, template_str, expected_arr',
+                  [(get_reader_input(x['input'], 'record'),
+                    get_reader_input(x['input'], 'template'),
+                    x['expected']) for x in reader_data])
+def test_reader_with_record_file_template_file(record_str, template_str, expected_arr):
+    rec_fp = StringIO(record_str)
+    tmpl_fp = StringIO(template_str)
+    with JSVReader(rec_fp, tmpl_fp) as r:
+        for (tid, rec), exp in zip(r.items(), expected_arr):
+            assert tid == '_'
+            assert rec == exp
+
+
+@mark.parametrize('record_str, template_str, expected_arr',
+                  [(get_reader_input(x['input'], 'record'),
+                    get_reader_input(x['input'], 'template'),
+                    x['expected']) for x in reader_data])
+def test_reader_with_record_file_template_filename(record_str, template_str, expected_arr):
+    rec_fp = StringIO(record_str)
+    with patch('builtins.open', MagicMock(return_value=StringIO(template_str))):
+        with JSVReader(rec_fp, '/some/template_file') as r:
+            for (tid, rec), exp in zip(r.items(), expected_arr):
                 assert tid == '_'
                 assert rec == exp
 
+
+@mark.parametrize('record_str, template_str, expected_arr',
+                  [(get_reader_input(x['input'], 'record'),
+                    get_reader_input(x['input'], 'template'),
+                    x['expected']) for x in reader_data])
+def test_reader_with_record_filename_template_file(record_str, template_str, expected_arr):
+    tmpl_fp = StringIO(template_str)
+    with patch('builtins.open', MagicMock(return_value=StringIO(record_str))):
+        with JSVReader('/some/record/file', tmpl_fp) as r:
+            for (tid, rec), exp in zip(r.items(), expected_arr):
+                assert tid == '_'
+                assert rec == exp
+
+
+@mark.parametrize('record_str, template_str, expected_arr',
+                  [(get_reader_input(x['input'], 'record'),
+                    get_reader_input(x['input'], 'template'),
+                    x['expected']) for x in reader_data])
+def test_reader_with_record_filename_template_filename(record_str, template_str, expected_arr):
+    with patch('builtins.open', MagicMock(side_effect=[StringIO(record_str), StringIO(template_str)])):
+        with JSVReader('/some/record/file', '/some/template_file') as r:
+            for (tid, rec), exp in zip(r.items(), expected_arr):
+                assert tid == '_'
+                assert rec == exp
+
+
+@mark.parametrize('input_str, expected_arr', [(get_reader_input(x['input']), x['expected']) for x in reader_data])
+def test_reader_with_record_filename(input_str, expected_arr):
+    with patch('builtins.open', MagicMock(return_value=StringIO(input_str))):
+        with JSVReader('/some/file') as r:
+            for (tid, rec), exp in zip(r.items(), expected_arr):
+                assert tid == '_'
+                assert rec == exp
+
+
+@mark.parametrize('input_str, expected_arr', [(get_reader_input(x['input']), x['expected']) for x in reader_data])
+def test_reader_with_record_file(input_str, expected_arr):
+    rec_fp = StringIO(input_str)
+    with JSVReader(rec_fp) as r:
+        for (tid, rec), exp in zip(r.items(), expected_arr):
+            assert tid == '_'
+            assert rec == exp
 
 
 writer_tmpl = JSVTemplate('{"key_1"}')
@@ -272,6 +350,15 @@ mock_file = MagicMock(side_effect=StringIOIter())
 
 @patch('builtins.open', mock_file)
 def test_jsv_writer():
+    w = JSVWriter('/some/file')
+    print(w.files.manage_rec_fp)
+    w['_'] = writer_tmpl
+    with w:
+        for obj in writer_recs:
+            w.write(obj)
+        w.files.rec_fp.seek(0)
+        out = w.files.rec_fp.read()
+        assert out == write_expected['combined']
     with JSVWriter('some file') as w:
         w['_'] = writer_tmpl
         for obj in writer_recs:
