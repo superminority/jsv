@@ -353,23 +353,17 @@ class JSVWriter(JSVCollection):
     def __init__(self, record_file, record_mode='at', template_dict=None, template_file=None, template_mode='at'):
         super().__init__(template_dict)
         self.files = FileManager(record_file, record_mode, template_file, template_mode)
-        if not self.files.manage_tmpl_fp:
+        if ((self.files.has_tmpl_file and not self.files.manage_tmpl_fp) or
+                (not self.files.has_tmpl_file and not self.files.manage_rec_fp)):
             for line in self.template_lines():
-                if line != '#_ {}':
-                    print(line, file=self.files.tmpl_fp)
+                print(line, file=self.files.tmpl_fp)
 
     def __enter__(self):
         self.files.enter()
-        if self.files.has_tmpl_file:
-            if self.files.manage_tmpl_fp:
-                for line in self.template_lines():
-                    if line != '#_ {}':
-                        print(line, file=self.files.tmpl_fp)
-        else:
-            if self.files.manage_rec_fp:
-                for line in self.template_lines():
-                    if line != '#_ {}':
-                        print(line, file=self.files.rec_fp)
+        if ((self.files.has_tmpl_file and self.files.manage_tmpl_fp) or
+                (not self.files.has_tmpl_file and self.files.manage_rec_fp)):
+            for line in self.template_lines():
+                print(line, file=self.files.tmpl_fp)
         return self
 
     def __exit__(self, t, v, tr):
@@ -444,11 +438,11 @@ class JSVReader(JSVCollection):
 
         """
         for line in self._fm.rec_fp:
-            tid, obj_or_tmpl = self.read_line(line)
-            if isinstance(obj_or_tmpl, JSVTemplate):
-                self[tid] = obj_or_tmpl
+            tid, obj = self.read_line(line)
+            if isinstance(obj, JSVTemplate):
+                self[tid] = obj
             else:
-                yield obj_or_tmpl
+                yield obj
 
     def items(self):
         """Iterator over both the values and the template ids for each record
