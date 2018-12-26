@@ -32,6 +32,13 @@ wellformed_db = [
                 'record_string': '[{1},{"two"},{3.0}]',
                 'object': [{'key_1': 1}, {'key_1': 'two'}, {'key_1': 3.0}]
             }
+        ],
+        'incompatible_records': [
+            {
+                'object': {'key_1': 1},
+                'error_type': ValueError,
+                'error_msg': 'Expecting a list'
+            }
         ]
     },
     {
@@ -48,6 +55,13 @@ wellformed_db = [
                 'record_string': '{[{"two",3},{4,"five"}],"key_4":{"sub_key":"value"}}',
                 'object': {'key_1': [{'key_2': "two", 'key_3': 3}, {'key_2': 4, 'key_3': "five"}],
                            'key_4': {'sub_key': 'value'}}
+            }
+        ],
+        'incompatible_records': [
+            {
+                'object': [{'key_1': 1}],
+                'error_type': ValueError,
+                'error_msg': 'Expecting a dictionary'
             }
         ]
     },
@@ -81,7 +95,26 @@ wellformed_db = [
         ]
     },
     {
-        'template': '{"key_1":{"key_1_1"},"key_2"}'
+        'template': '{"key_1":{"key_1_1"},"key_2"}',
+        'valid_records': [
+            {
+                'record_string': '{{"1_1"},"2"}',
+                'object': {'key_1': {'key_1_1': '1_1'}, 'key_2': '2'}
+            }
+        ]
+    },
+    {
+        'template': '{"key_1","key_2":{"key_2_1"},"key_3":[{"key_3_1"}]}',
+        'valid_records': [
+            {
+                'record_string': '{1,{2},[{3}]}',
+                'object': {'key_1': 1, 'key_2': {'key_2_1': 2}, 'key_3': [{'key_3_1': 3}]}
+            },
+            {
+                'record_string': '{1,{2},[]}',
+                'object': {'key_1': 1, 'key_2': {'key_2_1': 2}, 'key_3': []}
+            }
+        ]
     },
     {
         'template': '[{"key_1"},]',
@@ -96,11 +129,37 @@ wellformed_db = [
         ]
     },
     {
+        'template': '[,{"key_1"}]',
+        'alt_templates': [
+            '[,{ "key_1": {}}]'
+        ],
+        'valid_records': [
+            {
+                'record_string': '[3,{"value_1"}]',
+                'object': [3, {'key_1': 'value_1'}]
+            },
+            {
+                'record_string': '[3]',
+                'object': [3]
+            }
+        ]
+    },
+    {
         'template': '[[{"key_1"}]]',
         'alt_templates': [
             '[[{"key_1"}],[{"key_1"}]]',
             '[[{"key_1"},{"key_1"}]]',
             '[[{"key_1"},{"key_1"}],[{"key_1"},{"key_1"}]]'
+        ],
+        'valid_records': [
+            {
+                'record_string': '[[{"value_1"}]]',
+                'object': [[{'key_1': 'value_1'}]]
+            },
+            {
+                'record_string': '[[{"value_1"},{"value_2"}]]',
+                'object': [[{'key_1': 'value_1'}, {'key_1': 'value_2'}]]
+            }
         ]
     }
 ]
@@ -193,6 +252,10 @@ def test_template_nonequality(t_1, t_2):
     assert t_1 != t_2
 
 
+def test_template_nonequality_by_type():
+    assert JSVTemplate() != ''
+
+
 def create_decode_template_from_object_list(db):
     arr = []
     for c in db:
@@ -209,9 +272,39 @@ def test_decode_template_from_object(obj, expected):
     assert t == expected
 
 
+def test_type_errors():
+    try:
+        _ = JSVTemplate(1)
+        assert False
+    except TypeError as ex:
+        assert str(ex) == 'Expecting a string, dict or list'
+
+    t = JSVTemplate()
+    try:
+        t.decode(1)
+        assert False
+    except TypeError as ex:
+        assert str(ex) == 'argument `s` must be a string or a list of characters'
+
+
 # Test incompatible records
-def test_encode_incompatible_record():
-    pass
+def create_incompatible_record_array(db):
+    arr = []
+    for c in db:
+        if 'incompatible_records' in c:
+            t = JSVTemplate(c['template'])
+            for ir in c['incompatible_records']:
+                arr.append((t, ir['object'], ir['error_type'], ir['error_msg']))
+    return arr
+
+
+@pytest.mark.parametrize('tmpl, obj, err_type, err_msg', create_incompatible_record_array(wellformed_db))
+def test_encode_incompatible_record(tmpl, obj, err_type, err_msg):
+    try:
+        tmpl.encode(obj)
+        assert False
+    except err_type as ex:
+        assert str(ex) == err_msg
 
 
 def create_decode_incompatible_record_list(db):

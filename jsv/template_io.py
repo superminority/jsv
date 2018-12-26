@@ -1,6 +1,5 @@
 from os import fsdecode
 from io import TextIOBase
-from copy import deepcopy
 import re
 from jsv.template import JSVTemplate
 

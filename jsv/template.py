@@ -174,7 +174,7 @@ def decode_dict_entries(char_list, obj, it, ex_loc):
         else:
             n = {}
             obj[k] = n
-            it_next = iter(v.items())
+            it_next = is_last(v.items())
             decode_dict_entries(char_list, n, it_next, ex_loc)
 
     for isl, (k, v) in it:
@@ -204,13 +204,11 @@ def decode_dict_entries(char_list, obj, it, ex_loc):
 def decode_array_entries(char_list, arr, it, ex_loc):
 
     consume_next(char_list, {'['}, ex_loc)
-    try:
-        c = next(it)
-    except StopIteration:
-        raise ValueError('Unexpected error')
+    c = next(it)
 
     ws_trim(char_list)
     if char_list[-1] == ']':
+        char_list.pop()
         return
 
     if c is None:
@@ -708,6 +706,7 @@ hex_re = compile('[0-9a-fA-F]')
 json_encode = json.JSONEncoder(separators=(',', ':')).encode
 
 if __name__ == "__main__":
-    t = JSVTemplate('{"key_1","key_2","key_3","key_4"}')
-    t.decode('{1,2,3,,"key":1}')
+    t = JSVTemplate('[{"key_1"},]')
+    rec = t.decode('[{"value_1"},3,{"key_2":"value_2"}]')
+    print(rec)
     pass
