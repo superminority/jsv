@@ -1,6 +1,7 @@
 from jsv import JSVCollection, JSVTemplate, JSVReader, JSVWriter
 from io import StringIO
 from unittest.mock import MagicMock, patch
+from pytest import mark
 
 
 def test_basic_collection():
@@ -205,15 +206,47 @@ read_expected = [
     {'key_1': 'record_1'},
     {'key_1': 'record_2'}
 ]
-mock_file = MagicMock(return_value=StringIO('\n'.join(reader_data)))
+mock_read_file = MagicMock(return_value=StringIO('\n'.join(reader_data)))
 
 
-@patch('builtins.open', mock_file)
+@patch('builtins.open', mock_read_file)
 def test_jsv_reader():
     with JSVReader('some file') as r:
         for (tid, rec), exp in zip(r.items(), read_expected):
             assert tid == '_'
             assert rec == exp
+
+
+reader_data = [
+    {
+        'record_input_type': ['file_name', 'file_pointer'],
+        'template_input_type': ['file_name', 'file_pointer', 'record_file']
+    },
+    {
+        'record_input_type': 'file_name',
+        'template_input_type': 'record_file',
+        'expected': [
+            {'key_1': 'record_1'},
+            {'key_1': 'record_2'}
+        ],
+        'input': [
+            '#_ {"key_1"}',
+            '{"record_1"}',
+            '{"record_2"}'
+        ]
+    }
+]
+
+
+@mark.parametrize('test_data', [x for x in reader_data if x['record_input_type'] == 'file_name'
+                                and x['template_input_type'] == 'record_file'])
+def test_reader_with_record_filename(test_data):
+    with patch('builtins.open', MagicMock(return_value=StringIO('\n'.join(test_data['input'])))):
+        with JSVReader('/some/file') as r:
+            for (tid, rec), exp in zip(r.items(), test_data['expected']):
+                assert tid == '_'
+                assert rec == exp
+
 
 
 writer_tmpl = JSVTemplate('{"key_1"}')
@@ -273,6 +306,22 @@ def test_jsv_writer():
         tmpl_file.seek(0)
         out = tmpl_file.read()
         assert out == write_expected['template']
+
+
+@patch('builtins.open', mock_file)
+def test_file_manager():
+    w = JSVWriter('/some/file')
+    try:
+        _ = w.files.rec_fp
+        assert False
+    except RuntimeError as ex:
+        assert str(ex) == 'No file pointer to a record file. Are you in the context manager?'
+    try:
+        _ = w.files.tmpl_fp
+        assert False
+    except RuntimeError as ex:
+        assert str(ex) == 'No file pointer to a template file. Are you in the context manager?'
+
 
 
 
