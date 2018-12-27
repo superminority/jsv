@@ -349,7 +349,7 @@ def parse_template_string(s):
                     state = TemplateStates.DONE
             else:
                 raise JSVTemplateDecodeError(
-                    'Expecting `{`, `[` or `]`, got `{}`'.format(current_char), ex_loc(char_list))
+                    'Expecting `{{`, `[` or `]`, got `{}`'.format(current_char), ex_loc(char_list))
 
         # -----------------------------
         # State: EXPECT_ARRAY_OR_OBJECT
@@ -366,7 +366,7 @@ def parse_template_string(s):
                 has_keys.append(False)
                 state = TemplateStates.EXPECT_ARRAY_OR_OBJECT_OR_ARRAY_CLOSE
             else:
-                raise JSVTemplateDecodeError('Expecting `{` or `[`, got `{}`'.format(current_char), ex_loc(char_list))
+                raise JSVTemplateDecodeError('Expecting `{{` or `[`, got `{}`'.format(current_char), ex_loc(char_list))
 
         # --------------------------
         # State: ARRAY_NEXT_OR_CLOSE
@@ -424,7 +424,8 @@ def parse_template_string(s):
                 else:
                     state = TemplateStates.DONE
             else:
-                raise JSVTemplateDecodeError('Expecting `,`, `:`, or `}`, got `{}`'.format(current_char), ex_loc(char_list))
+                raise JSVTemplateDecodeError(
+                    'Expecting `,`, `:`, or `}}`, got `{}`'.format(current_char), ex_loc(char_list))
 
         # ---------------------------
         # State: OBJECT_NEXT_OR_CLOSE
@@ -447,7 +448,7 @@ def parse_template_string(s):
                 else:
                     state = TemplateStates.DONE
             else:
-                raise JSVTemplateDecodeError('Expecting `,` or `}`, got `{}`'.format(current_char), ex_loc(char_list))
+                raise JSVTemplateDecodeError('Expecting `,` or `}}`, got `{}`'.format(current_char), ex_loc(char_list))
 
         # -------------------
         # State: EXPECT_QUOTE
@@ -706,7 +707,7 @@ hex_re = compile('[0-9a-fA-F]')
 json_encode = json.JSONEncoder(separators=(',', ':')).encode
 
 if __name__ == "__main__":
-    t = JSVTemplate('[{"key_1"},]')
-    rec = t.decode('[{"value_1"},3,{"key_2":"value_2"}]')
-    print(rec)
+    t = JSVTemplate('{"key_0": {"key_1":{"key_1_1"}}}')
+    # rec = t.decode('[{"value_1"},3,{"key_2":"value_2"}]')
+    # print(rec)
     pass
