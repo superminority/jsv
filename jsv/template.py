@@ -257,16 +257,39 @@ def decode_array_entries(char_list, arr, it, ex_loc):
             decode_dict_entries(char_list, n, it_next, ex_loc)
 
 
+string_escape_dict = {
+    '"': '\\"',
+    '\\': '\\\\',
+    '\b': '\\b',
+    '\f': '\\f',
+    '\n': '\\n',
+    '\r': '\\r',
+    '\t': '\\t'
+}
+
+
+def encode_string(s):
+    out_arr = []
+    for c in s:
+        if c in string_escape_dict:
+            out_arr.append(string_escape_dict[c])
+        elif ord(c) < 128:
+            out_arr.append(c)
+        else:
+            out_arr.append('\\u' + hex(ord(c))[2:].zfill(4))
+    return ''.join(out_arr)
+
+
 def encode_template_dict(kt):
     out_arr = []
     for k, v in kt.items():
         if v:
             if isinstance(v, list):
-                out_arr.append('"{0}":{1}'.format(k, encode_template_list(v)))
+                out_arr.append('"{0}":{1}'.format(encode_string(k), encode_template_list(v)))
             else:
-                out_arr.append('"{0}":{1}'.format(k, encode_template_dict(v)))
+                out_arr.append('"{0}":{1}'.format(encode_string(k), encode_template_dict(v)))
         else:
-            out_arr.append('"{}"'.format(k))
+            out_arr.append('"{}"'.format(encode_string(k)))
 
     return '{{{}}}'.format(','.join(out_arr))
 
@@ -457,7 +480,7 @@ def parse_template_string(s):
             if current_char.isspace():
                 pass
             elif current_char == '"':
-                stack.append(get_json_string(char_list, ex_loc))
+                stack.append(get_json_string(char_list, ex_loc, 'template'))
                 state = TemplateStates.OBJECT_AFTER_KEY
                 has_keys = [True] * len(has_keys)
             elif current_char == '}':
@@ -531,15 +554,19 @@ class StringStates(Enum):
     STRING_HEX = 2
 
 
-def get_json_string(char_list, ex_loc):
+def get_json_string(char_list, ex_loc, source='record'):
     state = StringStates.STRING_NEXT_OR_CLOSE
     string_array = []
+    if source == 'record':
+        err_cls = JSVRecordDecodeError
+    else:
+        err_cls = JSVTemplateDecodeError
 
     while True:
         try:
             current_char = char_list.pop()
         except IndexError as ex:
-            raise JSVRecordDecodeError('End of string reached unexpectedly', ex_loc(char_list)) from ex
+            raise err_cls('End of string reached unexpectedly', ex_loc(char_list)) from ex
 
         # ---------------------------
         # State: STRING_NEXT_OR_CLOSE
@@ -562,9 +589,6 @@ def get_json_string(char_list, ex_loc):
             elif current_char == '\\':
                 string_array.append('\\')
                 state = StringStates.STRING_NEXT_OR_CLOSE
-            elif current_char == '/':
-                string_array.append('/')
-                state = StringStates.STRING_NEXT_OR_CLOSE
             elif current_char == 'b':
                 string_array.append('\b')
                 state = StringStates.STRING_NEXT_OR_CLOSE
@@ -584,7 +608,7 @@ def get_json_string(char_list, ex_loc):
                 hex_array = []
                 state = StringStates.STRING_HEX
             else:
-                raise JSVRecordDecodeError('expecting valid escape character', ex_loc(char_list))
+                raise err_cls('expecting valid escape character', ex_loc(char_list))
 
         # -----------------
         # State: STRING_HEX
@@ -593,12 +617,11 @@ def get_json_string(char_list, ex_loc):
             if hex_re.search(current_char):
                 hex_array.append(current_char)
                 if len(hex_array) >= 4:
-                    string_array.append(bytearray.fromhex(''.join(hex_array)).decode())
+                    print(''.join(hex_array))
+                    string_array.append(chr(int(''.join(hex_array), 16)))
                     state = StringStates.STRING_NEXT_OR_CLOSE
-                else:
-                    hex_array.append(current_char)
             else:
-                raise JSVRecordDecodeError('Expected a hex character ([0-9A-Fa-f])', ex_loc(char_list))
+                raise err_cls('Expected a hex character ([0-9A-Fa-f])', ex_loc(char_list))
 
 
 def get_template_str(obj):

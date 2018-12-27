@@ -6,7 +6,8 @@ wellformed_db = [
     {
         'template': '{}',
         'alt_templates': [
-            '[[]]'
+            '[[]]',
+            '[{}]'
         ],
         'valid_records': [
             {
@@ -93,6 +94,10 @@ wellformed_db = [
             {
                 'record_string': '{1,2,3,,"key_5":5}',
                 'object': {'key_1': 1, 'key_2': 2, 'key_3': 3, 'key_5': 5}
+            },
+            {
+                'record_string': '{"\\\\","\\"","\\b","\\n"}',
+                'object': {'key_1': '\\', 'key_2': '"', 'key_3': '\b', 'key_4': '\n'}
             }
         ],
         'invalid_records': [
@@ -110,6 +115,9 @@ wellformed_db = [
                 'record_string': '{{"1_1"},"2"}',
                 'object': {'key_1': {'key_1_1': '1_1'}, 'key_2': '2'}
             }
+        ],
+        'invalid_records': [
+            ('{{"value_1_1"}, ["bad", "json}', JSVRecordDecodeError, 'Error decoding raw json: column 15')
         ]
     },
     {
@@ -144,6 +152,14 @@ wellformed_db = [
                 'record_string': '[{"value_1"},3,{"key_2":"value_2"}]',
                 'object': [{'key_1': 'value_1'}, 3, {'key_2': 'value_2'}]
             }
+        ],
+        'invalid_records': [
+            ('[{"value_1", "key_2"',
+             JSVRecordDecodeError,
+             'End of string reached unexpectedly while awaiting `:`: column 19'),
+            ('[{"value_1", "key_2" &',
+             JSVRecordDecodeError,
+             'Expecting `:`: column 21')
         ]
     },
     {
@@ -188,6 +204,27 @@ wellformed_db = [
                 'object': [[{'key_1': 'value_1'}, {'key_1': 'value_2'}]]
             }
         ]
+    },
+    {
+        'template': '{"\\" \\\\ \\b \\f \\n \\r \\t"}',
+        'valid_records': [
+            {
+                'record_string': '{1}',
+                'object': {'" \\ \b \f \n \r \t': 1}
+            }
+        ]
+    },
+    {
+        'template': '{"\\u0438"}',
+        'alt_templates': [
+            '{"и"}'
+        ],
+        'valid_records': [
+            {
+                'record_string': '{1}',
+                'object': {'и': 1}
+            }
+        ]
     }
 ]
 
@@ -198,7 +235,9 @@ malformed_template_db = [
     ('{"key_1":&', JSVTemplateDecodeError, 'Expecting `{` or `[`, got `&`: column 9'),
     ('[{"key_1"} &', JSVTemplateDecodeError, 'Expecting `,` or `]`, got `&`: column 11'),
     ('{"key_1" &', JSVTemplateDecodeError, 'Expecting `,`, `:`, or `}`, got `&`: column 9'),
-    ('{"key_1":{"key_2":{"key_3"}} &', JSVTemplateDecodeError, 'Expecting `,` or `}`, got `&`: column 29')
+    ('{"key_1":{"key_2":{"key_3"}} &', JSVTemplateDecodeError, 'Expecting `,` or `}`, got `&`: column 29'),
+    ('{&}', JSVTemplateDecodeError, 'Expecting `"`, got `&`: column 1'),
+    ('{"key_1', JSVTemplateDecodeError, 'End of string reached unexpectedly: column 6')
 ]
 
 
