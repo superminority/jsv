@@ -5,6 +5,9 @@ import pytest
 wellformed_db = [
     {
         'template': '{}',
+        'alt_templates': [
+            '[[]]'
+        ],
         'valid_records': [
             {
                 'record_string': '{"key_1":1}',
@@ -141,6 +144,15 @@ wellformed_db = [
             {
                 'record_string': '[3]',
                 'object': [3]
+            }
+        ]
+    },
+    {
+        'template': '[,[{"key_1"}],[{"key_2"}]]',
+        'valid_records': [
+            {
+                'record_string': '[3,[{"value_1"}],[{"value_2"}],[{"value_3"}]]',
+                'object': [3, [{'key_1': 'value_1'}], [{'key_2': 'value_2'}], [{'key_2': 'value_3'}]]
             }
         ]
     },
