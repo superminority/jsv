@@ -511,7 +511,7 @@ def get_json_value(char_list, ex_loc):
     d = json.JSONDecoder()
     try:
         v, r = d.raw_decode(s)
-    except json.JSONDecodeError:
+    except ValueError:
         raise JSVRecordDecodeError('Error decoding raw json', ex_loc(char_list))
     for i in range(r + start_len - end_len):
         char_list.pop()
