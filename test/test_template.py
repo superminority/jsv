@@ -47,14 +47,14 @@ wellformed_db = [
             {
                 'object': {'key_1': 1},
                 'error_type': ValueError,
-                'error_msg': 'Expecting a list'
+                'error_msg': 'Expecting a list or tuple'
             }
         ]
     },
     {
         'template': '{"key_1":[{"key_2","key_3"}]}',
         'template_objects': [
-            {'key_1': [{'key_2': [2,3,4], 'key_3': None}, {'key_2': 'value', 'key_3': True}]}
+            {'key_1': [{'key_2': [2, 3, 4], 'key_3': None}, {'key_2': 'value', 'key_3': True}]}
         ],
         'valid_records': [
             {
@@ -215,6 +215,10 @@ wellformed_db = [
                 'record_string': '[[{"value_1"},{"value_2"}]]',
                 'object': [[{'key_1': 'value_1'}, {'key_1': 'value_2'}]]
             }
+        ],
+        'invalid_records': [
+            ('', JSVRecordDecodeError, 'End of string reached unexpectedly: column -1'),
+            ('{', JSVRecordDecodeError, 'Unexpected character `{` encountered: column 0')
         ]
     },
     {
@@ -256,6 +260,27 @@ malformed_template_db = [
 ]
 
 
+def copy_lists_with_tuples(obj):
+    if isinstance(obj, dict):
+        out = {}
+        for k, v in obj.items():
+            if isinstance(v, dict) or isinstance(v, list):
+                out[k] = copy_lists_with_tuples(v)
+            else:
+                out[k] = v
+    elif isinstance(obj, list):
+        out = []
+        for v in obj:
+            if isinstance(v, dict) or isinstance(v, list):
+                out.append(copy_lists_with_tuples(v))
+            else:
+                out.append(v)
+        out = tuple(out)
+    else:
+        out = obj
+    return out
+
+
 def create_encode_record_list(db):
     arr = []
     for wf in db:
@@ -263,6 +288,7 @@ def create_encode_record_list(db):
             template = wf['template']
             for vr in wf['valid_records']:
                 arr.append((template, vr['object'], vr['record_string']))
+                arr.append((template, copy_lists_with_tuples(vr['object']), vr['record_string']))
     return arr
 
 
@@ -349,6 +375,7 @@ def create_decode_template_from_object_list(db):
             ref_template = JSVTemplate(c['template'])
             for obj in c['template_objects']:
                 arr.append((obj, ref_template))
+                arr.append((copy_lists_with_tuples(obj), ref_template))
     return arr
 
 

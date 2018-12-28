@@ -62,7 +62,8 @@ class JSVTemplate:
     def __init__(self, key_source='{}'):
         if isinstance(key_source, str):
             template_str = key_source
-        elif isinstance(key_source, dict) or isinstance(key_source, list) or key_source is None:
+        elif isinstance(key_source, dict) or isinstance(key_source, list)\
+                or isinstance(key_source, tuple) or key_source is None:
             template_str = get_template_str(key_source)
         else:
             raise TypeError('Expecting a string, dict, list or None')
@@ -138,8 +139,8 @@ def encode_dict(obj, fm):
 
 
 def encode_list(arr, fm):
-    if not isinstance(arr, list):
-        raise ValueError('Expecting a list')
+    if not (isinstance(arr, list) or isinstance(arr, tuple)):
+        raise ValueError('Expecting a list or tuple')
 
     entries = []
     for i, v in enumerate(arr):
@@ -712,10 +713,6 @@ def prune_array_end(arr):
             break
 
 
-def err_msg(msg, i, c):
-    return '{0} @ index: {1}, character: {2}'.format(msg, i, c)
-
-
 def is_last(v):
     it = iter(v)
     e = next(it)
@@ -731,9 +728,3 @@ def is_last(v):
 
 hex_re = compile('[0-9a-fA-F]')
 json_encode = json.JSONEncoder(separators=(',', ':')).encode
-
-if __name__ == "__main__":
-    t = JSVTemplate('{"key_0": {"key_1":{"key_1_1"}}}')
-    # rec = t.decode('[{"value_1"},3,{"key_2":"value_2"}]')
-    # print(rec)
-    pass
