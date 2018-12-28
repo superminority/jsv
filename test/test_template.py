@@ -5,6 +5,10 @@ import pytest
 wellformed_db = [
     {
         'template': '{}',
+        'template_objects': [
+            None,
+            {}
+        ],
         'alt_templates': [
             '[[]]',
             '[{}]'
@@ -19,7 +23,9 @@ wellformed_db = [
     {
         'template': '[{"key_1"}]',
         'template_objects': [
-            [{'key_1': None}]
+            [{'key_1': None}],
+            [{'key_1': {}}],
+            [{'key_1': []}]
         ],
         'alt_templates': [
             '[{ "key_1" \t }   \n]',
@@ -102,7 +108,10 @@ wellformed_db = [
         ],
         'invalid_records': [
             ('{1,2,3,,}', JSVRecordDecodeError, 'Expecting `"`: column 8'),
-            ('{1,2,3,4,', JSVRecordDecodeError, 'End of string reached unexpectedly while awaiting `"`: column 8')
+            ('{1,2,3,4,', JSVRecordDecodeError, 'End of string reached unexpectedly while awaiting `"`: column 8'),
+            ('{1,2,3,4,"key_5', JSVRecordDecodeError, 'End of string reached unexpectedly: column 14'),
+            ('{1,2,3,4,"key_\\h": 5}', JSVRecordDecodeError, 'expecting valid escape character: column 15'),
+            ('{1,2,3,4,"key_\\u4t44": 5}', JSVRecordDecodeError, 'Expected a hex character ([0-9A-Fa-f]): column 17')
         ]
     },
     {
@@ -189,6 +198,9 @@ wellformed_db = [
     },
     {
         'template': '[[{"key_1"}]]',
+        'template_objects': [
+            [[{'key_1': 3}]]
+        ],
         'alt_templates': [
             '[[{"key_1"}],[{"key_1"}]]',
             '[[{"key_1"},{"key_1"}]]',
@@ -237,7 +249,10 @@ malformed_template_db = [
     ('{"key_1" &', JSVTemplateDecodeError, 'Expecting `,`, `:`, or `}`, got `&`: column 9'),
     ('{"key_1":{"key_2":{"key_3"}} &', JSVTemplateDecodeError, 'Expecting `,` or `}`, got `&`: column 29'),
     ('{&}', JSVTemplateDecodeError, 'Expecting `"`, got `&`: column 1'),
-    ('{"key_1', JSVTemplateDecodeError, 'End of string reached unexpectedly: column 6')
+    ('{"key_1', JSVTemplateDecodeError, 'End of string reached unexpectedly: column 6'),
+    ('{"key_\\h"}', JSVTemplateDecodeError, 'expecting valid escape character: column 7'),
+    ('{"key_\\ua9yt"}', JSVTemplateDecodeError, 'Expected a hex character ([0-9A-Fa-f]): column 10'),
+    (1, TypeError, 'Expecting a string, dict, list or None')
 ]
 
 
@@ -348,7 +363,7 @@ def test_type_errors():
         _ = JSVTemplate(1)
         assert False
     except TypeError as ex:
-        assert str(ex) == 'Expecting a string, dict or list'
+        assert str(ex) == 'Expecting a string, dict, list or None'
 
     t = JSVTemplate()
     try:

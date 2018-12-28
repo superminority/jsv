@@ -65,7 +65,7 @@ class JSVTemplate:
         elif isinstance(key_source, dict) or isinstance(key_source, list) or key_source is None:
             template_str = get_template_str(key_source)
         else:
-            raise TypeError('Expecting a string, dict or list')
+            raise TypeError('Expecting a string, dict, list or None')
         self._key_tree = parse_template_string(template_str)
 
     def encode(self, obj):
@@ -557,16 +557,15 @@ class StringStates(Enum):
 def get_json_string(char_list, ex_loc, source='record'):
     state = StringStates.STRING_NEXT_OR_CLOSE
     string_array = []
-    if source == 'record':
-        err_cls = JSVRecordDecodeError
-    else:
-        err_cls = JSVTemplateDecodeError
 
     while True:
         try:
             current_char = char_list.pop()
         except IndexError as ex:
-            raise err_cls('End of string reached unexpectedly', ex_loc(char_list)) from ex
+            if source == 'record':
+                raise JSVRecordDecodeError('End of string reached unexpectedly', ex_loc(char_list)) from ex
+            else:
+                raise JSVTemplateDecodeError('End of string reached unexpectedly', ex_loc(char_list)) from ex
 
         # ---------------------------
         # State: STRING_NEXT_OR_CLOSE
@@ -608,7 +607,10 @@ def get_json_string(char_list, ex_loc, source='record'):
                 hex_array = []
                 state = StringStates.STRING_HEX
             else:
-                raise err_cls('expecting valid escape character', ex_loc(char_list))
+                if source == 'record':
+                    raise JSVRecordDecodeError('expecting valid escape character', ex_loc(char_list))
+                else:
+                    raise JSVTemplateDecodeError('expecting valid escape character', ex_loc(char_list))
 
         # -----------------
         # State: STRING_HEX
@@ -621,19 +623,20 @@ def get_json_string(char_list, ex_loc, source='record'):
                     string_array.append(chr(int(''.join(hex_array), 16)))
                     state = StringStates.STRING_NEXT_OR_CLOSE
             else:
-                raise err_cls('Expected a hex character ([0-9A-Fa-f])', ex_loc(char_list))
+                if source == 'record':
+                    raise JSVRecordDecodeError('Expected a hex character ([0-9A-Fa-f])', ex_loc(char_list))
+                else:
+                    raise JSVTemplateDecodeError('Expected a hex character ([0-9A-Fa-f])', ex_loc(char_list))
 
 
 def get_template_str(obj):
     if not obj:
-        return None
+        return ''
 
     if isinstance(obj, dict):
         return obj_to_template_str(obj)
     elif isinstance(obj, list) or isinstance(obj, tuple):
         return arr_to_template_str(obj)
-
-    raise ValueError('Expecting object or array')
 
 
 def obj_to_template_str(obj):
@@ -658,7 +661,7 @@ def obj_to_template_str(obj):
 
 
 def arr_to_template_str(arr):
-    if len(arr) <= 0:
+    if len(arr) == 0:
         return None
 
     out_arr = []
