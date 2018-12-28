@@ -16,6 +16,11 @@ documentation
 
 See `<https://jsv.readthedocs.io/>`_
 
+installation
+------------
+
+``pip install jsv``
+
 motivation
 ----------
 
@@ -39,7 +44,7 @@ Let's start with a simple example. Suppose we have a list of three json objects 
     
 We transform this into: ::
 
-    #_ "template":{"key_1","key_2","key_3"})
+    #_ {"key_1","key_2","key_3"}
     {1,2,"three"}
     {"four",true,6}
     {7,"eight",null}
@@ -94,7 +99,7 @@ Here is the initial json lines file: ::
     {"account_number":111111111,"new_address":{"street":"123 main st.","city":"San Francisco","state":"CA","zip":"94103"}
     {"account_number":222222222,"transaction_type":"sale","merchant_id":848757678,"amount":5974.29}
     
-Here is the jsv file: ::
+Here is the ``.jsv`` file: ::
 
     #trns {"account_number","transaction_type","merchant_id","amount"}
     @trns {111111111,"sale",987654321,123.45}
@@ -110,6 +115,22 @@ The ``@`` followed by the template name indicates a record. New record types can
     @addr {111111111,{"123 main st.","San Francisco","CA","94103"}}
     {222222222,:"sale",848757678,5974.29}
 
+split template and record files
++++++++++++++++++++++++++++++++
+
+We can also store the templates in a separate file. By convention, we use the ``.jsvt`` extension for the template file, and the ``.jsvr`` extension for the record file. Using the example from the previous section, here is the template file: ::
+
+    #trns {"account_number","transaction_type","merchant_id","amount"}
+    #addr {"id":"A","name":"address change","template":{"account_number","new_address":{"street","city","state","zip"}}}
+
+and here is the record file: ::
+
+    @trns {111111111,"sale",987654321,123.45}
+    @addr {111111111,{"123 main st.","San Francisco","CA","94103"}}
+    @trns {222222222,:"sale",848757678,5974.29}
+
+This feature is intended to facilitate analysis on a cluster device, where the record file can be split among nodes, and the template file can be put in the global cache.
+
 definitions
 -----------
 
@@ -123,8 +144,6 @@ record
   
 object
   An ordinary json object, or its equivalent representation in a given language.
-  
-In effect, we are converting dictionaries to lists in the values object, but we are careful to distinguish between a list that will be converted back to a dictionary. The same goes for the keys object, except that the primitives are all strings. Any library that implements the jsv format must therefore define list-like data structures to handle these cases.
 
 future features
 ---------------

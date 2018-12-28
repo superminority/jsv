@@ -19,4 +19,3 @@ Exceptions
 
 .. autoclass:: jsv.JSVTemplateDecodeError
 .. autoclass:: jsv.JSVRecordDecodeError
-.. autoclass:: jsv.JSVRecordEncodeError

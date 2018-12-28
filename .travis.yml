@@ -28,7 +28,7 @@ jobs:
         on:
           all_branches: true
     - stage: deploy-prod
-      if: (branch = master) && (tag IS present) && (tag =~ /^v(\d+!)?\d+(\.\d+)*((a|b|rc)\d+)?(\.post\d+)?$/)
+      if: (tag IS present) && (tag =~ /^v(\d+!)?\d+(\.\d+)*((a|b|rc)\d+)?(\.post\d+)?$/)
       python: "3.6"
       before_deploy:
         - build_scripts/add_version

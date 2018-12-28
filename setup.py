@@ -19,6 +19,9 @@ setup(
     include_package_data=False,
     zip_safe=True,
     python_requires=">=3.4",
+    tests_require=[
+        'pytest'
+    ],
     license=about['__license__'],
     data_files=[("", ["LICENSE"])],
     classifiers=[

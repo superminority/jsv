@@ -4,10 +4,6 @@ from enum import unique, Enum
 from re import compile
 
 
-class JSVRecordEncodeError(ValueError):
-    """An error occurred while encoding an object into a jsv record."""
-
-
 class JSVDecodeError(ValueError):
 
     def __init__(self, msg, pos):
@@ -74,7 +70,7 @@ class JSVTemplate:
         
         Args:
             obj (json-compatible object): obj must also conform to the key structure of the Template, otherwise
-                a :class:`.JSVRecordEncodeError` will be raised.
+                an error will be raised.
         """
         c = self._key_tree
 
@@ -89,8 +85,8 @@ class JSVTemplate:
         """Decode a jsv string into a json-compatible object
         
         Args:
-            s (str): s represents a json object that has been encoded with the given template. If it does not
-                conform to the template, or is unparsable as jsv, a :class:`.JSVRecordDecodeError` will be raised.
+            s (str): s represents a json object that has been encoded with the given template. If it does not conform
+                to the template, or is not parsable as jsv, a :class:`.JSVRecordDecodeError` will be raised.
         """
         c = self._key_tree
         if isinstance(s, str):

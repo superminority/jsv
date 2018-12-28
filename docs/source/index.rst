@@ -12,6 +12,10 @@ JSON Separated Values (jsv)
 
    index
 
+Installation
+============
+
+``pip install jsv``
 
 Motivation
 ==========
