@@ -5,9 +5,11 @@ JSV - JSON separated values
     :target: https://travis-ci.org/akovner/jsv
 .. image:: https://coveralls.io/repos/github/akovner/jsv/badge.svg?branch=master
     :target: https://coveralls.io/github/akovner/jsv?branch=master
-.. image:: https://readthedocs.org/projects/jsv/badge/?version=latest
-    :target: https://jsv.readthedocs.io/en/latest/?badge=latest
+.. image:: https://readthedocs.org/projects/jsv/badge/?version=stable
+    :target: https://jsv.readthedocs.io/en/stable/
     :alt: Documentation Status
+.. image:: https://badge.fury.io/py/jsv.svg
+    :target: https://badge.fury.io/py/jsv
 
 A compact way to represent a stream of similar json objects
 
