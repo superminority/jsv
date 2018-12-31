@@ -338,6 +338,25 @@ class JSVWriter(JSVCollection):
     As :class:`JSVWriter` inherits from :class:`JSVCollection`, it maintains any templates assigned to it. In addition,
     templates are immediately written to the file or stream when added.
 
+    Example:
+
+        >>> out = []
+        >>> out.append({'key_1': 1, 'key_2': 2, 'key_3': 3})
+        >>> out.append({'key_1': 4, 'key_2': 5, 'key_3': 6})
+        >>> out.append({'key_1': 7, 'key_2': 8, 'key_3': 9})
+        >>> with jsv.JSVWriter('out.jsv', 'wt', {'_': '{"key_1","key_2","key_3"}'}) as w:
+        ...     for obj in out:
+        ...         w.write(obj)
+
+    This creates the file ``out.jsv`` which looks like this:
+
+    .. code-block:: text
+
+        #_ {"key_1","key_2","key_3"}
+        {1,2,3}
+        {4,5,6}
+        {7,8,9}
+
     Args:
         record_file (filepath or :class:`io.TextIOBase`): Either a file path, or a file pointer to which records should
             be written. If ``template_file`` is not given, templates will be written here as well.
@@ -399,11 +418,32 @@ class JSVReader(JSVCollection):
 
     This is the main class for reading JSV records from a file or stream. If either ``record_file`` or ``template_file``
     is a string, then it must be used as a context manager. Otherwise, the context manager does nothing with the file
-    pointers, and the object can be used as a context manager or not.
+    pointers, and the object can be used directly.
 
     All of the templates used by a :class:`JSVReader` instance must come from either ``record_file`` or
     ``template_file``. If it is present, ``template_file`` is read during initialization (if ``template_file`` is a file
     pointer) or when entering the context manager (if ``template_file`` is a file path).
+
+    Example:
+
+        Take the file ``in.jsv`` which looks like this:
+
+    .. code-block:: text
+
+        #_ {"key_1","key_2","key_3"}
+        {1,2,3}
+        {4,5,6}
+        {7,8,9}
+
+    We can then run the following code:
+
+        >>> with jsv.JSVReader('in.jsv') as r:
+        ...     for obj in r:
+        ...         print(obj)
+        ...
+        {'key_1': 1, 'key_2': 2, 'key_3': 3}
+        {'key_1': 4, 'key_2': 5, 'key_3': 6}
+        {'key_1': 7, 'key_2': 8, 'key_3': 9}
 
     Args:
         record_file (filepath or :class:`io.TextIOBase`): Either a file path, or a file pointer from which records
@@ -411,7 +451,6 @@ class JSVReader(JSVCollection):
         template_file (filepath or :class:`io.TextIOBase`): Either a file path, or a file pointer to which templates
             should be written. If present, templates and records will be written to different files. By convention,
             records should use the file extension ``.jsvr`` and templates should use file extension ``.jsvt``.
-
     """
     def __init__(self, record_file, template_file=None):
         super().__init__()
@@ -429,11 +468,11 @@ class JSVReader(JSVCollection):
         self._fm.exit()
 
     def __iter__(self):
-        """Iterator magic method for the reader object.
+        """Iterator magic method for the reader object. Templates are consumed to decode records, but are not returned
+        by the iterator.
 
         Returns:
-             a json-compatible object
-
+            (object) where ``object`` is a json-compatible object representing a record.
         """
         for line in self._fm.rec_fp:
             tid, obj = self.read_line(line)
@@ -443,17 +482,18 @@ class JSVReader(JSVCollection):
                 yield obj
 
     def items(self):
-        """Iterator over both the values and the template ids for each record
+        """Iterator over both the values and the template ids for each record. Templates are consumed to decode records,
+        but are not returned by the iterator.
 
         Returns:
              (tid, object) where ``tid`` is the id of the template used, and ``object`` is a json-compatible object.
         """
         for line in self._fm.rec_fp:
-            tid, obj_or_tmpl = self.read_line(line)
-            if isinstance(obj_or_tmpl, JSVTemplate):
-                self[tid] = obj_or_tmpl
+            tid, obj = self.read_line(line)
+            if isinstance(obj, JSVTemplate):
+                self[tid] = obj
             else:
-                yield tid, obj_or_tmpl
+                yield tid, obj
 
 
 id_regex_str = '[a-zA-Z_0-9]+'

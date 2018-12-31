@@ -21,7 +21,7 @@ The resulting file will be:
 Basic read usage:
 
     >>> with jsv.JSVReader('out.jsv') as r:
-    ...     for tid, obj in r:
+    ...     for tid, obj in r.items():
     ...         print('{0}: {1}'.format(tid, obj))
 
 The output will be:

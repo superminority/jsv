@@ -4,7 +4,7 @@ API
 Main Interface
 --------------
 .. autoclass:: jsv.JSVReader
-   :members: __iter__, values
+   :members: __iter__, items
    :show-inheritance:
 .. autoclass:: jsv.JSVWriter
    :members:
