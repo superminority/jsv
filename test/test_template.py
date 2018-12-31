@@ -5,6 +5,14 @@ import pytest
 wellformed_db = [
     {
         'template': '{}',
+        'template_objects': [
+            None,
+            {}
+        ],
+        'alt_templates': [
+            '[[]]',
+            '[{}]'
+        ],
         'valid_records': [
             {
                 'record_string': '{"key_1":1}',
@@ -15,7 +23,9 @@ wellformed_db = [
     {
         'template': '[{"key_1"}]',
         'template_objects': [
-            [{'key_1': None}]
+            [{'key_1': None}],
+            [{'key_1': {}}],
+            [{'key_1': []}]
         ],
         'alt_templates': [
             '[{ "key_1" \t }   \n]',
@@ -32,12 +42,19 @@ wellformed_db = [
                 'record_string': '[{1},{"two"},{3.0}]',
                 'object': [{'key_1': 1}, {'key_1': 'two'}, {'key_1': 3.0}]
             }
+        ],
+        'incompatible_records': [
+            {
+                'object': {'key_1': 1},
+                'error_type': ValueError,
+                'error_msg': 'Expecting a list or tuple'
+            }
         ]
     },
     {
         'template': '{"key_1":[{"key_2","key_3"}]}',
         'template_objects': [
-            {'key_1': [{'key_2': [2,3,4], 'key_3': None}, {'key_2': 'value', 'key_3': True}]}
+            {'key_1': [{'key_2': [2, 3, 4], 'key_3': None}, {'key_2': 'value', 'key_3': True}]}
         ],
         'valid_records': [
             {
@@ -49,10 +66,20 @@ wellformed_db = [
                 'object': {'key_1': [{'key_2': "two", 'key_3': 3}, {'key_2': 4, 'key_3': "five"}],
                            'key_4': {'sub_key': 'value'}}
             }
+        ],
+        'incompatible_records': [
+            {
+                'object': [{'key_1': 1}],
+                'error_type': ValueError,
+                'error_msg': 'Expecting a dictionary'
+            }
         ]
     },
     {
         'template': '{"key_1","key_2","key_3","key_4"}',
+        'alt_templates': [
+            '{"key_1"       , "key_2" , "key_3" , "key_4"}'
+        ],
         'valid_records': [
             {
                 'record_string': '{1,2,3,4}',
@@ -73,15 +100,56 @@ wellformed_db = [
             {
                 'record_string': '{1,2,3,,"key_5":5}',
                 'object': {'key_1': 1, 'key_2': 2, 'key_3': 3, 'key_5': 5}
+            },
+            {
+                'record_string': '{"\\\\","\\"","\\b","\\n"}',
+                'object': {'key_1': '\\', 'key_2': '"', 'key_3': '\b', 'key_4': '\n'}
             }
         ],
         'invalid_records': [
             ('{1,2,3,,}', JSVRecordDecodeError, 'Expecting `"`: column 8'),
-            ('{1,2,3,4,', JSVRecordDecodeError, 'End of string reached unexpectedly while awaiting `"`: column 8')
+            ('{1,2,3,4,', JSVRecordDecodeError, 'End of string reached unexpectedly while awaiting `"`: column 8'),
+            ('{1,2,3,4,"key_5', JSVRecordDecodeError, 'End of string reached unexpectedly: column 14'),
+            ('{1,2,3,4,"key_\\h": 5}', JSVRecordDecodeError, 'expecting valid escape character: column 15'),
+            ('{1,2,3,4,"key_\\u4t44": 5}', JSVRecordDecodeError, 'Expected a hex character ([0-9A-Fa-f]): column 17')
         ]
     },
     {
-        'template': '{"key_1":{"key_1_1"},"key_2"}'
+        'template': '{"key_1":{"key_1_1"},"key_2"}',
+        'alt_templates': [
+            '{"key_1":{"key_1_1"}   ,   "key_2"}'
+        ],
+        'valid_records': [
+            {
+                'record_string': '{{"1_1"},"2"}',
+                'object': {'key_1': {'key_1_1': '1_1'}, 'key_2': '2'}
+            }
+        ],
+        'invalid_records': [
+            ('{{"value_1_1"}, ["bad", "json}', JSVRecordDecodeError, 'Error decoding raw json: column 15')
+        ]
+    },
+    {
+        'template': '{"key_1":{"key_2":{"key_3"}}}',
+        'valid_records': [
+            {
+                'record_string': '{{{3}}}',
+                'object': {'key_1': {'key_2': {'key_3': 3}}}
+            }
+        ]
+    },
+    {
+        'template': '{"key_1","key_2":{"key_2_1"},"key_3":[{"key_3_1"}]}',
+        'valid_records': [
+            {
+                'record_string': '{1,{2},[{3}]}',
+                'object': {'key_1': 1, 'key_2': {'key_2_1': 2}, 'key_3': [{'key_3_1': 3}]}
+            },
+            {
+                'record_string': '{1,{2},[]}',
+                'object': {'key_1': 1, 'key_2': {'key_2_1': 2}, 'key_3': []}
+            }
+        ]
     },
     {
         'template': '[{"key_1"},]',
@@ -93,22 +161,124 @@ wellformed_db = [
                 'record_string': '[{"value_1"},3,{"key_2":"value_2"}]',
                 'object': [{'key_1': 'value_1'}, 3, {'key_2': 'value_2'}]
             }
+        ],
+        'invalid_records': [
+            ('[{"value_1", "key_2"',
+             JSVRecordDecodeError,
+             'End of string reached unexpectedly while awaiting `:`: column 19'),
+            ('[{"value_1", "key_2" &',
+             JSVRecordDecodeError,
+             'Expecting `:`: column 21')
+        ]
+    },
+    {
+        'template': '[,{"key_1"}]',
+        'alt_templates': [
+            '[,{ "key_1": {}}]'
+        ],
+        'valid_records': [
+            {
+                'record_string': '[3,{"value_1"}]',
+                'object': [3, {'key_1': 'value_1'}]
+            },
+            {
+                'record_string': '[3]',
+                'object': [3]
+            }
+        ]
+    },
+    {
+        'template': '[,[{"key_1"}],[{"key_2"}]]',
+        'valid_records': [
+            {
+                'record_string': '[3,[{"value_1"}],[{"value_2"}],[{"value_3"}]]',
+                'object': [3, [{'key_1': 'value_1'}], [{'key_2': 'value_2'}], [{'key_2': 'value_3'}]]
+            }
         ]
     },
     {
         'template': '[[{"key_1"}]]',
+        'template_objects': [
+            [[{'key_1': 3}]]
+        ],
         'alt_templates': [
             '[[{"key_1"}],[{"key_1"}]]',
             '[[{"key_1"},{"key_1"}]]',
             '[[{"key_1"},{"key_1"}],[{"key_1"},{"key_1"}]]'
+        ],
+        'valid_records': [
+            {
+                'record_string': '[[{"value_1"}]]',
+                'object': [[{'key_1': 'value_1'}]]
+            },
+            {
+                'record_string': '[[{"value_1"},{"value_2"}]]',
+                'object': [[{'key_1': 'value_1'}, {'key_1': 'value_2'}]]
+            }
+        ],
+        'invalid_records': [
+            ('', JSVRecordDecodeError, 'End of string reached unexpectedly: column -1'),
+            ('{', JSVRecordDecodeError, 'Unexpected character `{` encountered: column 0')
+        ]
+    },
+    {
+        'template': '{"\\" \\\\ \\b \\f \\n \\r \\t"}',
+        'valid_records': [
+            {
+                'record_string': '{1}',
+                'object': {'" \\ \b \f \n \r \t': 1}
+            }
+        ]
+    },
+    {
+        'template': '{"\\u0438"}',
+        'alt_templates': [
+            '{"и"}'
+        ],
+        'valid_records': [
+            {
+                'record_string': '{1}',
+                'object': {'и': 1}
+            }
         ]
     }
 ]
 
 
 malformed_template_db = [
-    ('{"key_1"', JSVTemplateDecodeError, 'End of string reached unexpectedly: column 7')
+    ('{"key_1"', JSVTemplateDecodeError, 'End of string reached unexpectedly: column 7'),
+    ('[&', JSVTemplateDecodeError, 'Expecting `{`, `[` or `]`, got `&`: column 1'),
+    ('{"key_1":&', JSVTemplateDecodeError, 'Expecting `{` or `[`, got `&`: column 9'),
+    ('[{"key_1"} &', JSVTemplateDecodeError, 'Expecting `,` or `]`, got `&`: column 11'),
+    ('{"key_1" &', JSVTemplateDecodeError, 'Expecting `,`, `:`, or `}`, got `&`: column 9'),
+    ('{"key_1":{"key_2":{"key_3"}} &', JSVTemplateDecodeError, 'Expecting `,` or `}`, got `&`: column 29'),
+    ('{&}', JSVTemplateDecodeError, 'Expecting `"`, got `&`: column 1'),
+    ('{"key_1', JSVTemplateDecodeError, 'End of string reached unexpectedly: column 6'),
+    ('{"key_\\h"}', JSVTemplateDecodeError, 'expecting valid escape character: column 7'),
+    ('{"key_\\ua9yt"}', JSVTemplateDecodeError, 'Expected a hex character ([0-9A-Fa-f]): column 10'),
+    (1, TypeError, 'Expecting a string, dict, list or None')
 ]
+
+
+def copy_lists_with_tuples(obj):
+    if isinstance(obj, dict):
+        out = {}
+        for k, v in obj.items():
+            if isinstance(v, dict) or isinstance(v, list):
+                out[k] = copy_lists_with_tuples(v)
+            else:
+                out[k] = v
+    elif isinstance(obj, list):
+        out = []
+        for v in obj:
+            if isinstance(v, dict) or isinstance(v, list):
+                out.append(copy_lists_with_tuples(v))
+            else:
+                out.append(v)
+        out = tuple(out)
+    else:
+        out = obj
+    return out
 
 
 def create_encode_record_list(db):
@@ -118,6 +288,7 @@ def create_encode_record_list(db):
             template = wf['template']
             for vr in wf['valid_records']:
                 arr.append((template, vr['object'], vr['record_string']))
+                arr.append((template, copy_lists_with_tuples(vr['object']), vr['record_string']))
     return arr
 
 
@@ -193,6 +364,10 @@ def test_template_nonequality(t_1, t_2):
     assert t_1 != t_2
 
 
+def test_template_nonequality_by_type():
+    assert JSVTemplate() != ''
+
+
 def create_decode_template_from_object_list(db):
     arr = []
     for c in db:
@@ -200,6 +375,7 @@ def create_decode_template_from_object_list(db):
             ref_template = JSVTemplate(c['template'])
             for obj in c['template_objects']:
                 arr.append((obj, ref_template))
+                arr.append((copy_lists_with_tuples(obj), ref_template))
     return arr
 
 
@@ -209,9 +385,39 @@ def test_decode_template_from_object(obj, expected):
     assert t == expected
 
 
+def test_type_errors():
+    try:
+        _ = JSVTemplate(1)
+        assert False
+    except TypeError as ex:
+        assert str(ex) == 'Expecting a string, dict, list or None'
+
+    t = JSVTemplate()
+    try:
+        t.decode(1)
+        assert False
+    except TypeError as ex:
+        assert str(ex) == 'argument `s` must be a string or a list of characters'
+
+
 # Test incompatible records
-def test_encode_incompatible_record():
-    pass
+def create_incompatible_record_array(db):
+    arr = []
+    for c in db:
+        if 'incompatible_records' in c:
+            t = JSVTemplate(c['template'])
+            for ir in c['incompatible_records']:
+                arr.append((t, ir['object'], ir['error_type'], ir['error_msg']))
+    return arr
+
+
+@pytest.mark.parametrize('tmpl, obj, err_type, err_msg', create_incompatible_record_array(wellformed_db))
+def test_encode_incompatible_record(tmpl, obj, err_type, err_msg):
+    try:
+        tmpl.encode(obj)
+        assert False
+    except err_type as ex:
+        assert str(ex) == err_msg
 
 
 def create_decode_incompatible_record_list(db):

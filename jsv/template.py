@@ -4,10 +4,6 @@ from enum import unique, Enum
 from re import compile
 
 
-class JSVRecordEncodeError(ValueError):
-    """An error occurred while encoding an object into a jsv record."""
-
-
 class JSVDecodeError(ValueError):
 
     def __init__(self, msg, pos):
@@ -62,10 +58,11 @@ class JSVTemplate:
     def __init__(self, key_source='{}'):
         if isinstance(key_source, str):
             template_str = key_source
-        elif isinstance(key_source, dict) or isinstance(key_source, list) or key_source is None:
+        elif isinstance(key_source, dict) or isinstance(key_source, list)\
+                or isinstance(key_source, tuple) or key_source is None:
             template_str = get_template_str(key_source)
         else:
-            raise TypeError('Expecting a string, dict or list')
+            raise TypeError('Expecting a string, dict, list or None')
         self._key_tree = parse_template_string(template_str)
 
     def encode(self, obj):
@@ -73,7 +70,7 @@ class JSVTemplate:
         
         Args:
             obj (json-compatible object): obj must also conform to the key structure of the Template, otherwise
-                a :class:`.JSVRecordEncodeError` will be raised.
+                an error will be raised.
         """
         c = self._key_tree
 
@@ -88,8 +85,8 @@ class JSVTemplate:
         """Decode a jsv string into a json-compatible object
         
         Args:
-            s (str): s represents a json object that has been encoded with the given template. If it does not
-                conform to the template, or is unparsable as jsv, a :class:`.JSVRecordDecodeError` will be raised.
+            s (str): s represents a json object that has been encoded with the given template. If it does not conform
+                to the template, or is not parsable as jsv, a :class:`.JSVRecordDecodeError` will be raised.
         """
         c = self._key_tree
         if isinstance(s, str):
@@ -138,8 +135,8 @@ def encode_dict(obj, fm):
 
 
 def encode_list(arr, fm):
-    if not isinstance(arr, list):
-        raise ValueError('Expecting a list')
+    if not (isinstance(arr, list) or isinstance(arr, tuple)):
+        raise ValueError('Expecting a list or tuple')
 
     entries = []
     for i, v in enumerate(arr):
@@ -174,7 +171,7 @@ def decode_dict_entries(char_list, obj, it, ex_loc):
         else:
             n = {}
             obj[k] = n
-            it_next = iter(v.items())
+            it_next = is_last(v.items())
             decode_dict_entries(char_list, n, it_next, ex_loc)
 
     for isl, (k, v) in it:
@@ -204,13 +201,11 @@ def decode_dict_entries(char_list, obj, it, ex_loc):
 def decode_array_entries(char_list, arr, it, ex_loc):
 
     consume_next(char_list, {'['}, ex_loc)
-    try:
-        c = next(it)
-    except StopIteration:
-        raise ValueError('Unexpected error')
+    c = next(it)
 
     ws_trim(char_list)
     if char_list[-1] == ']':
+        char_list.pop()
         return
 
     if c is None:
@@ -259,16 +254,39 @@ def decode_array_entries(char_list, arr, it, ex_loc):
             decode_dict_entries(char_list, n, it_next, ex_loc)
 
 
+string_escape_dict = {
+    '"': '\\"',
+    '\\': '\\\\',
+    '\b': '\\b',
+    '\f': '\\f',
+    '\n': '\\n',
+    '\r': '\\r',
+    '\t': '\\t'
+}
+
+
+def encode_string(s):
+    out_arr = []
+    for c in s:
+        if c in string_escape_dict:
+            out_arr.append(string_escape_dict[c])
+        elif ord(c) < 128:
+            out_arr.append(c)
+        else:
+            out_arr.append('\\u' + hex(ord(c))[2:].zfill(4))
+    return ''.join(out_arr)
+
+
 def encode_template_dict(kt):
     out_arr = []
     for k, v in kt.items():
         if v:
             if isinstance(v, list):
-                out_arr.append('"{0}":{1}'.format(k, encode_template_list(v)))
+                out_arr.append('"{0}":{1}'.format(encode_string(k), encode_template_list(v)))
             else:
-                out_arr.append('"{0}":{1}'.format(k, encode_template_dict(v)))
+                out_arr.append('"{0}":{1}'.format(encode_string(k), encode_template_dict(v)))
         else:
-            out_arr.append('"{}"'.format(k))
+            out_arr.append('"{}"'.format(encode_string(k)))
 
     return '{{{}}}'.format(','.join(out_arr))
 
@@ -351,7 +369,7 @@ def parse_template_string(s):
                     state = TemplateStates.DONE
             else:
                 raise JSVTemplateDecodeError(
-                    'Expecting `{`, `[` or `]`, got `{}`'.format(current_char), ex_loc(char_list))
+                    'Expecting `{{`, `[` or `]`, got `{}`'.format(current_char), ex_loc(char_list))
 
         # -----------------------------
         # State: EXPECT_ARRAY_OR_OBJECT
@@ -368,7 +386,7 @@ def parse_template_string(s):
                 has_keys.append(False)
                 state = TemplateStates.EXPECT_ARRAY_OR_OBJECT_OR_ARRAY_CLOSE
             else:
-                raise JSVTemplateDecodeError('Expecting `{` or `[`, got `{}`'.format(current_char), ex_loc(char_list))
+                raise JSVTemplateDecodeError('Expecting `{{` or `[`, got `{}`'.format(current_char), ex_loc(char_list))
 
         # --------------------------
         # State: ARRAY_NEXT_OR_CLOSE
@@ -426,7 +444,8 @@ def parse_template_string(s):
                 else:
                     state = TemplateStates.DONE
             else:
-                raise JSVTemplateDecodeError('Expecting `,`, `:`, or `}`, got `{}`'.format(current_char), ex_loc(char_list))
+                raise JSVTemplateDecodeError(
+                    'Expecting `,`, `:`, or `}}`, got `{}`'.format(current_char), ex_loc(char_list))
 
         # ---------------------------
         # State: OBJECT_NEXT_OR_CLOSE
@@ -449,7 +468,7 @@ def parse_template_string(s):
                 else:
                     state = TemplateStates.DONE
             else:
-                raise JSVTemplateDecodeError('Expecting `,` or `}`, got `{}`'.format(current_char), ex_loc(char_list))
+                raise JSVTemplateDecodeError('Expecting `,` or `}}`, got `{}`'.format(current_char), ex_loc(char_list))
 
         # -------------------
         # State: EXPECT_QUOTE
@@ -458,7 +477,7 @@ def parse_template_string(s):
             if current_char.isspace():
                 pass
             elif current_char == '"':
-                stack.append(get_json_string(char_list, ex_loc))
+                stack.append(get_json_string(char_list, ex_loc, 'template'))
                 state = TemplateStates.OBJECT_AFTER_KEY
                 has_keys = [True] * len(has_keys)
             elif current_char == '}':
@@ -489,7 +508,7 @@ def get_json_value(char_list, ex_loc):
     d = json.JSONDecoder()
     try:
         v, r = d.raw_decode(s)
-    except json.JSONDecodeError:
+    except ValueError:
         raise JSVRecordDecodeError('Error decoding raw json', ex_loc(char_list))
     for i in range(r + start_len - end_len):
         char_list.pop()
@@ -532,7 +551,7 @@ class StringStates(Enum):
     STRING_HEX = 2
 
 
-def get_json_string(char_list, ex_loc):
+def get_json_string(char_list, ex_loc, source='record'):
     state = StringStates.STRING_NEXT_OR_CLOSE
     string_array = []
 
@@ -540,7 +559,10 @@ def get_json_string(char_list, ex_loc):
         try:
             current_char = char_list.pop()
         except IndexError as ex:
-            raise JSVRecordDecodeError('End of string reached unexpectedly', ex_loc(char_list)) from ex
+            if source == 'record':
+                raise JSVRecordDecodeError('End of string reached unexpectedly', ex_loc(char_list)) from ex
+            else:
+                raise JSVTemplateDecodeError('End of string reached unexpectedly', ex_loc(char_list)) from ex
 
         # ---------------------------
         # State: STRING_NEXT_OR_CLOSE
@@ -563,9 +585,6 @@ def get_json_string(char_list, ex_loc):
             elif current_char == '\\':
                 string_array.append('\\')
                 state = StringStates.STRING_NEXT_OR_CLOSE
-            elif current_char == '/':
-                string_array.append('/')
-                state = StringStates.STRING_NEXT_OR_CLOSE
             elif current_char == 'b':
                 string_array.append('\b')
                 state = StringStates.STRING_NEXT_OR_CLOSE
@@ -585,7 +604,10 @@ def get_json_string(char_list, ex_loc):
                 hex_array = []
                 state = StringStates.STRING_HEX
             else:
-                raise JSVRecordDecodeError('expecting valid escape character', ex_loc(char_list))
+                if source == 'record':
+                    raise JSVRecordDecodeError('expecting valid escape character', ex_loc(char_list))
+                else:
+                    raise JSVTemplateDecodeError('expecting valid escape character', ex_loc(char_list))
 
         # -----------------
         # State: STRING_HEX
@@ -594,24 +616,24 @@ def get_json_string(char_list, ex_loc):
             if hex_re.search(current_char):
                 hex_array.append(current_char)
                 if len(hex_array) >= 4:
-                    string_array.append(bytearray.fromhex(''.join(hex_array)).decode())
+                    print(''.join(hex_array))
+                    string_array.append(chr(int(''.join(hex_array), 16)))
                     state = StringStates.STRING_NEXT_OR_CLOSE
-                else:
-                    hex_array.append(current_char)
             else:
-                raise JSVRecordDecodeError('Expected a hex character ([0-9A-Fa-f])', ex_loc(char_list))
+                if source == 'record':
+                    raise JSVRecordDecodeError('Expected a hex character ([0-9A-Fa-f])', ex_loc(char_list))
+                else:
+                    raise JSVTemplateDecodeError('Expected a hex character ([0-9A-Fa-f])', ex_loc(char_list))
 
 
 def get_template_str(obj):
     if not obj:
-        return None
+        return ''
 
     if isinstance(obj, dict):
         return obj_to_template_str(obj)
     elif isinstance(obj, list) or isinstance(obj, tuple):
         return arr_to_template_str(obj)
-
-    raise ValueError('Expecting object or array')
 
 
 def obj_to_template_str(obj):
@@ -636,7 +658,7 @@ def obj_to_template_str(obj):
 
 
 def arr_to_template_str(arr):
-    if len(arr) <= 0:
+    if len(arr) == 0:
         return None
 
     out_arr = []
@@ -687,10 +709,6 @@ def prune_array_end(arr):
             break
 
 
-def err_msg(msg, i, c):
-    return '{0} @ index: {1}, character: {2}'.format(msg, i, c)
-
-
 def is_last(v):
     it = iter(v)
     e = next(it)
@@ -706,8 +724,3 @@ def is_last(v):
 
 hex_re = compile('[0-9a-fA-F]')
 json_encode = json.JSONEncoder(separators=(',', ':')).encode
-
-if __name__ == "__main__":
-    t = JSVTemplate('{"key_1","key_2","key_3","key_4"}')
-    t.decode('{1,2,3,,"key":1}')
-    pass

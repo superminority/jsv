@@ -19,6 +19,9 @@ setup(
     include_package_data=False,
     zip_safe=True,
     python_requires=">=3.4",
+    tests_require=[
+        'pytest'
+    ],
     license=about['__license__'],
     data_files=[("", ["LICENSE"])],
     classifiers=[
@@ -32,8 +35,6 @@ setup(
         'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
-        'Programming Language :: Python :: Implementation :: CPython',
-        'Programming Language :: Python :: Implementation :: PyPy',
         'Operating System :: OS Independent',
         'Topic :: Text Processing'
     ]

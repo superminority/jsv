@@ -1,6 +1,6 @@
 __title__ = 'jsv'
 __description__ = 'A compact representation of bulk JSON objects.'
-__url__ = 'http://jsv-io.org'
+__url__ = 'https://github.com/akovner/jsv'
 __version__ = None
 __commit_hash__ = None
 __author__ = 'Alex Kovner'
